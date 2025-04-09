@@ -145,6 +145,16 @@ venv.bak/
 
 # mkdocs documentation
 /site
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+*.xml
+*.xlsx
+*.xls
+*.csv
+*.json
 
 # mypy
 .mypy_cache/
@@ -172,3 +182,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+/data
