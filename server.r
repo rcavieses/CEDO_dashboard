@@ -18,6 +18,7 @@ library(rmarkdown)
 library(scales)
 library(tidyr)
 library(shinyjs)
+library(shinyBS)
 
 
 # Server function
@@ -25,10 +26,47 @@ function(input, output, session) {
   
   # Helper functions ----------------------------------------------------------
   
+  # Función para determinar y obtener rutas de archivos
+  get_file_paths <- function(base_dir, filename = NULL) {
+    # Rutas posibles
+    standard_path <- if (is.null(filename)) base_dir else file.path(base_dir, filename)
+    www_path <- if (is.null(filename)) file.path("www", base_dir) else file.path("www", base_dir, filename)
+    
+    # Determinar cuál estructura está siendo usada
+    if(dir.exists(file.path("www", base_dir))) {
+      # Para verificar existencia de archivos en el sistema
+      file_path <- www_path
+      # Para URL en el navegador (relativa a www)
+      url_path <- if (is.null(filename)) base_dir else file.path(base_dir, filename)
+      using_www <- TRUE
+    } else {
+      file_path <- standard_path
+      # En la estructura antigua, usaríamos una ruta especial
+      url_path <- standard_path
+      using_www <- FALSE
+    }
+    
+    return(list(
+      file_path = file_path,      # Ruta del sistema para verificar existencia
+      url_path = url_path,        # Ruta URL para navegador
+      using_www = using_www       # Indicador de estructura
+    ))
+  }
+  
   # Function to safely read CSV files
   safe_read_csv <- function(file_path, ...) {
     tryCatch({
       read_csv(file_path, ...)
+    }, error = function(e) {
+      warning(paste("Could not read file:", file_path, "Error:", e$message))
+      return(NULL)
+    })
+  }
+  
+  # Function to safely read text files
+  safe_read_text <- function(file_path) {
+    tryCatch({
+      readLines(file_path, warn = FALSE) %>% paste(collapse = "\n")
     }, error = function(e) {
       warning(paste("Could not read file:", file_path, "Error:", e$message))
       return(NULL)
@@ -80,39 +118,96 @@ function(input, output, session) {
   
   # 1. Executive Summary ------------------------------------------------------
   
-  # Load executive summary data
-  exec_summary_data <- reactive({
-    safe_read_csv("data/resumen/summary.csv")
+  # Load executive summary text directly from the summary.txt file
+  exec_summary_text <- reactive({
+    paths <- get_file_paths("data/resumen/summary.txt")
+    safe_read_text(paths$file_path)
   })
   
   # Render executive summary text
   output$executive_summary <- renderUI({
-    data <- exec_summary_data()
+    text <- exec_summary_text()
     
-    if (is.null(data)) {
-      return(HTML("<div class='alert alert-warning'>Executive summary data not available.</div>"))
-    }
-    
-    # Assuming the CSV has columns like "section" and "content"
-    sections <- lapply(1:nrow(data), function(i) {
-      section <- data$section[i]
-      content <- data$content[i]
+    if (is.null(text)) {
+      # Try loading from CSV as fallback if text file is not available
+      paths <- get_file_paths("data/resumen/summary.csv")
+      data <- safe_read_csv(paths$file_path)
       
-      tagList(
-        h4(section),
-        p(content)
-      )
-    })
-    
-    do.call(tagList, sections)
+      if (is.null(data)) {
+        return(HTML("<div class='alert alert-warning'>Executive summary data not available.</div>"))
+      }
+      
+      # Assuming the CSV has columns like "section" and "content"
+      sections <- lapply(1:nrow(data), function(i) {
+        section <- data$section[i]
+        content <- data$content[i]
+        
+        tagList(
+          h4(section),
+          p(content)
+        )
+      })
+      
+      do.call(tagList, sections)
+    } else {
+      # Process the text from summary.txt
+      # Split by lines that look like headers (e.g., "## Section Title")
+      sections <- strsplit(text, "(?=^#{2,3} )", perl = TRUE)[[1]]
+      
+      processed_sections <- lapply(sections, function(section) {
+        # Extract the header if it exists
+        header_match <- regmatches(section, regexec("^(#{2,3}) (.+)$", section, perl = TRUE))[[1]]
+        
+        if (length(header_match) > 0) {
+          header_text <- header_match[3]
+          # Remove the header from the content
+          content <- sub("^#{2,3} .+\n", "", section)
+          
+          # Determine heading level
+          heading_level <- nchar(header_match[2])
+          heading_tag <- paste0("h", heading_level)
+          
+          # Return the formatted section
+          return(tagList(
+            tags$div(class = "summary-section",
+                    tags[[heading_tag]](header_text, class = "summary-heading"),
+                    HTML(markdown::markdownToHTML(text = content, fragment.only = TRUE))
+            )
+          ))
+        } else {
+          # No header, just content
+          return(tagList(
+            tags$div(class = "summary-section",
+                    HTML(markdown::markdownToHTML(text = section, fragment.only = TRUE))
+            )
+          ))
+        }
+      })
+      
+      do.call(tagList, processed_sections)
+    }
   })
   
   # 2. Environmental Variables ------------------------------------------------
   
-  # List available entities (states)
+  # List available entities (states) from CSV files
   env_entities <- reactive({
-    env_files <- list_files_with_ext("data/var_amb", "xlsx")
-    entities <- sapply(env_files, extract_filename)
+    paths <- get_file_paths("data/var_amb")
+    
+    if(paths$using_www) {
+      # Si estamos usando estructura www
+      env_files <- list.files(path = paths$file_path, pattern = "\\.csv$", full.names = FALSE)
+      # Extraer solo el nombre del archivo sin extensión
+      entities <- tools::file_path_sans_ext(env_files)
+    } else {
+      # Estructura original
+      env_files <- list_files_with_ext("data/var_amb", "csv")
+      # Extraer solo el nombre del archivo sin ruta ni extensión
+      entities <- sapply(env_files, function(path) {
+        basename(tools::file_path_sans_ext(path))
+      })
+    }
+    
     return(entities)
   })
   
@@ -122,94 +217,165 @@ function(input, output, session) {
     updateSelectInput(session, "env_entity", 
                       choices = entities,
                       selected = if(length(entities) > 0) entities[1] else NULL,
-                      label = "Seleccionar Entidad:")
+                      label = "Entidad:")
   })
   
   # Load environmental data for selected entity
   env_data <- reactive({
     req(input$env_entity)
-    file_path <- file.path("data/var_amb", paste0(input$env_entity, ".xlsx"))
-    safe_read_excel(file_path)
+    
+    # Create reverse mapping to get filename from display name
+    display_to_filename <- c(
+      "BCS (Costa este)" = "BCS_este",
+      "Nayarit" = "Nayarit",
+      "Quintana Roo" = "Quintana_Roo",
+      "Yucatan" = "Yucatan"
+    )
+    
+    # Get the actual filename
+    filename <- display_to_filename[input$env_entity]
+    if(is.na(filename)) filename <- input$env_entity  # Fallback if not found
+    
+    # Get the correct path with our helper function
+    paths <- get_file_paths("data/var_amb", paste0(filename, ".csv"))
+    
+    data <- safe_read_csv(paths$file_path, locale = locale(encoding = "utf-8"))
+    
+    if (!is.null(data)) {
+      # Create Date column from Año and Mes
+      if ("Año" %in% colnames(data) && "Mes" %in% colnames(data)) {
+        # Convert Mes to numeric if it's a month name
+        if (is.character(data$Mes)) {
+          month_names <- c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                          "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre")
+          month_abbr <- c("Ene", "Feb", "Mar", "Abr", "May", "Jun", 
+                         "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+          
+          # Check if month names are in Spanish
+          if (any(data$Mes %in% month_names)) {
+            data$Mes_num <- match(data$Mes, month_names)
+          } else if (any(data$Mes %in% month_abbr)) {
+            data$Mes_num <- match(data$Mes, month_abbr)
+          } else {
+            # Try to convert directly if it's a number in string format
+            data$Mes_num <- as.numeric(data$Mes)
+          }
+        } else {
+          data$Mes_num <- data$Mes
+        }
+        
+        # Create Date as the 15th of each month
+        data$Date <- as.Date(paste(data$Año, data$Mes_num, "15", sep="-"), format="%Y-%m-%d")
+        
+        # Make sure it's sorted chronologically
+        data <- data[order(data$Date), ]
+      }
+    }
+    
+    return(data)
   })
   
-  # Update variable selector based on selected entity
+  # Update entity selector with custom display names
   observe({
-    data <- env_data()
-    if (!is.null(data)) {
-      # Assuming first column is date, all others are variables
-      var_names <- colnames(data)[-1]
-      updateSelectInput(session, "env_variable", 
-                      choices = var_names,
-                      selected = if(length(var_names) > 0) var_names[1] else NULL,
-                      label = "Seleccionar Variable:")
-    }
+    entities <- env_entities()
+    
+    # Create a named vector for display names
+    display_names <- c(
+      "BCS_este" = "BCS (Costa este)",
+      "Nayarit" = "Nayarit",
+      "Quintana_Roo" = "Quintana Roo",
+      "Yucatan" = "Yucatan"
+    )
+    
+    # Filter out any entities not in our mapping
+    valid_entities <- entities[entities %in% names(display_names)]
+    
+    # Create choices with display names
+    choices <- display_names[valid_entities]
+    
+    updateSelectInput(session, "env_entity", 
+                      choices = choices,
+                      selected = if(length(choices) > 0) choices[1] else NULL,
+                      label = "Entidad:")
   })
   
   # Plot time series for selected entity and variable
   output$env_time_series <- renderPlotly({
-    req(input$env_entity, input$env_variable)
+    req(input$env_entity, input$env_variables)
     data <- env_data()
     
-    if (is.null(data)) {
+    if (is.null(data) || length(input$env_variables) == 0) {
       return(NULL)
     }
     
-    # Assuming first column is date
-    date_col <- colnames(data)[1]
+    # Use created Date column for x-axis
+    date_col <- "Date"
     
-    # Convert date to Year-Month format if it's not already
-    # This handles the issue mentioned in the prompt for x-axis
-    if (!inherits(data[[date_col]], "Date") && !inherits(data[[date_col]], "POSIXct")) {
-      tryCatch({
-        # Attempt to convert the date column to proper Date format
-        data[[date_col]] <- as.Date(data[[date_col]])
-      }, error = function(e) {
-        # If that fails, try parsing it as character
-        if (is.character(data[[date_col]])) {
-          data[[date_col]] <- as.Date(data[[date_col]], format = "%Y-%m-%d")
-        }
-      })
-    }
-    
-    # Format for year-month display
-    if (inherits(data[[date_col]], "Date") || inherits(data[[date_col]], "POSIXct")) {
-      data$year_month <- format(data[[date_col]], "%Y-%m")
-      date_col <- "year_month"
-      
-      # If desired, create a proper time order
-      data$year_month <- factor(data$year_month, levels = unique(data$year_month))
-    }
-    
-    # Create time series plot
-    p <- ggplot(data, aes_string(x = date_col, y = input$env_variable)) +
-      geom_line(color = "#2874A6", group = 1) +  # group=1 ensures line connects all points
-      geom_point(color = "#2874A6", size = 3) +
+    # Create a plot with multiple variables
+    p <- ggplot(data, aes(x = !!sym(date_col))) +
       labs(
-        title = paste("Variable Ambiental:", input$env_variable),
-        subtitle = paste("Entidad:", input$env_entity),
+        title = paste("Variables Ambientales para", input$env_entity),
         x = "Fecha",
-        y = input$env_variable
+        y = "Valor"
       ) +
       theme_minimal() +
       theme(
         text = element_text(family = "Inter"),
         plot.title = element_text(size = 16, color = "#1a365d", hjust = 0.5),
-        plot.subtitle = element_text(size = 14, hjust = 0.5),
         axis.title = element_text(size = 12, color = "#2d3748"),
         axis.text = element_text(size = 10, color = "#4a5568"),
-        axis.text.x = element_text(angle = 45, hjust = 1) # Angle the x labels for better readability
-      )
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.title = element_blank()
+      ) +
+      scale_x_date(date_breaks = "6 months", date_labels = "%Y-%m")
     
+    # Colors for different variables
+    var_colors <- c(
+      "Temperatura (C)" = "#2874A6",
+      "Clorofila (mg/m3)" = "#27AE60",
+      "PDO" = "#8E44AD",
+      "MEI" = "#D35400"
+    )
+    
+    # Add each selected variable to the plot
+    for (var in input$env_variables) {
+      # Skip if the variable doesn't exist in the data
+      if (!var %in% colnames(data)) next
+      
+      # Normalize the data for better visualization (optional)
+      # This would depend on your requirements
+      
+      # Add the line for this variable
+      p <- p + 
+        geom_line(aes(y = !!sym(var), color = var), size = 1) +
+        geom_point(aes(y = !!sym(var), color = var), size = 2)
+    }
+    
+    # Add the color scale
+    p <- p + scale_color_manual(values = var_colors)
+    
+    # Convert to plotly
     ggplotly(p) %>% 
-      layout(margin = list(l = 50, r = 50, b = 80, t = 75)) # Increased bottom margin for angled labels
+      layout(margin = list(l = 50, r = 50, b = 80, t = 75))
   })
   
   # 3. Species Risk -----------------------------------------------------------
   
   # List available species with risk images
   risk_species <- reactive({
-    risk_files <- list_files_with_ext("data/riesgo_sp", "png")
-    species <- sapply(risk_files, extract_filename)
+    paths <- get_file_paths("data/riesgo_sp")
+    
+    if(paths$using_www) {
+      # Si estamos usando estructura www
+      risk_files <- list.files(path = paths$file_path, pattern = "\\.png$", full.names = FALSE)
+      species <- tools::file_path_sans_ext(risk_files)
+    } else {
+      # Estructura original
+      risk_files <- list_files_with_ext("data/riesgo_sp", "png")
+      species <- sapply(risk_files, extract_filename)
+    }
+    
     return(species)
   })
   
@@ -226,15 +392,23 @@ function(input, output, session) {
   output$risk_image <- renderUI({
     req(input$risk_species)
     
-    img_path <- file.path("data/riesgo_sp", paste0(input$risk_species, ".png"))
-    if (!file.exists(img_path)) {
+    paths <- get_file_paths("data/riesgo_sp", paste0(input$risk_species, ".png"))
+    
+    if (!file.exists(paths$file_path)) {
       return(HTML("<div class='alert alert-warning'>Imagen no encontrada para la especie seleccionada.</div>"))
+    }
+    
+    # Si estamos usando estructura www, la URL es relativa a www
+    if(paths$using_www) {
+      img_src <- paths$url_path
+    } else {
+      img_src <- paths$file_path
     }
     
     tags$div(
       style = "text-align: center;",
-      tags$h4(paste("Evaluación de riesgo para", input$risk_species)),
-      tags$img(src = img_path, width = "80%", class = "img-responsive")
+      tags$h4(paste("Evaluación de riesgo para", gsub("_", " ", input$risk_species))),
+      tags$img(src = img_src, width = "80%", class = "img-responsive")
     )
   })
   
@@ -242,33 +416,75 @@ function(input, output, session) {
   
   # List available localities with maps
   fishing_localities <- reactive({
-    map_files <- list_files_with_ext("data/mapas_areas_pesca", "jpg")
-    localities <- sapply(map_files, extract_filename)
-    return(localities)
+    paths <- get_file_paths("data/mapas_areas_pesca")
+    
+    if(paths$using_www) {
+      # Si estamos usando estructura www
+      map_files <- list.files(path = paths$file_path, pattern = "\\.jpg$", full.names = FALSE)
+      # Extraer solo el nombre del archivo sin extensión
+      localities <- tools::file_path_sans_ext(map_files)
+    } else {
+      # Estructura original
+      map_files <- list_files_with_ext("data/mapas_areas_pesca", "jpg")
+      localities <- sapply(map_files, extract_filename)
+    }
+    
+    # Limpiar nombres: reemplazar guiones bajos por espacios para mejor visualización
+    display_names <- gsub("_", " ", localities)
+    display_names <- tools::toTitleCase(display_names)
+    
+    # Crear un vector nombrado donde los nombres son los que se muestran
+    # y los valores son los nombres de archivo
+    localities_named <- localities
+    names(localities_named) <- display_names
+    
+    return(localities_named)
   })
   
   # Update locality selector for fishing area maps
   observe({
     localities <- fishing_localities()
-    updateSelectInput(session, "fishing_locality", 
+    
+    if(length(localities) > 0) {
+      updateSelectInput(session, "fishing_locality", 
                       choices = localities,
-                      selected = if(length(localities) > 0) localities[1] else NULL,
+                      selected = localities[1],
                       label = "Seleccionar Localidad:")
+    } else {
+      updateSelectInput(session, "fishing_locality", 
+                      choices = character(0),
+                      label = "Seleccionar Localidad: (no se encontraron mapas)")
+    }
   })
   
   # Render fishing area map
   output$fishing_map <- renderUI({
     req(input$fishing_locality)
     
-    img_path <- file.path("data/mapas_areas_pesca", paste0(input$fishing_locality, ".jpg"))
-    if (!file.exists(img_path)) {
-      return(HTML("<div class='alert alert-warning'>Map not found for selected locality.</div>"))
+    paths <- get_file_paths("data/mapas_areas_pesca", paste0(input$fishing_locality, ".jpg"))
+    
+    if (!file.exists(paths$file_path)) {
+      return(HTML("<div class='alert alert-warning'>Mapa no encontrado para la localidad seleccionada.</div>"))
+    }
+    
+    # Si estamos usando estructura www, la URL es relativa a www
+    if(paths$using_www) {
+      img_src <- paths$url_path
+    } else {
+      img_src <- paths$file_path
+    }
+    
+    # Obtener el nombre de visualización
+    display_name <- names(which(fishing_localities() == input$fishing_locality))
+    if(length(display_name) == 0) {
+      display_name <- gsub("_", " ", input$fishing_locality)
+      display_name <- tools::toTitleCase(display_name)
     }
     
     tags$div(
       style = "text-align: center;",
-      tags$h4(paste("Potential fishing areas for", input$fishing_locality)),
-      tags$img(src = img_path, width = "80%", class = "img-responsive")
+      tags$h4(paste("Áreas potenciales de pesca para", display_name)),
+      tags$img(src = img_src, width = "80%", class = "img-responsive")
     )
   })
   
@@ -276,7 +492,8 @@ function(input, output, session) {
   
   # Load adaptation actions data
   adaptation_data <- reactive({
-    safe_read_csv("data/acc_adap/adaptacion.csv")
+    paths <- get_file_paths("data/acc_adap/adaptacion.csv")
+    safe_read_csv(paths$file_path)
   })
   
   # Get unique cooperatives for selector
@@ -335,12 +552,14 @@ function(input, output, session) {
   
   # Load population growth data
   population_growth_data <- reactive({
-    safe_read_csv("data/crec_tam_pob/tabla9.csv")
+    paths <- get_file_paths("data/crec_tam_pob/tabla9.csv")
+    safe_read_csv(paths$file_path)
   })
   
   # Load population size data
   population_size_data <- reactive({
-    safe_read_csv("data/crec_tam_pob/tabla10.csv")
+    paths <- get_file_paths("data/crec_tam_pob/tabla10.csv")
+    safe_read_csv(paths$file_path)
   })
   
   # Get unique species for selector
@@ -418,7 +637,8 @@ function(input, output, session) {
   
   # Load capture determinants data
   capture_data <- reactive({
-    safe_read_csv("data/det_cap/determinantes_captura.csv")
+    paths <- get_file_paths("data/det_cap/determinantes_captura.csv")
+    safe_read_csv(paths$file_path)
   })
   
   # Get unique species for selector
@@ -477,7 +697,7 @@ function(input, output, session) {
   
   # Load vulnerability data from SQLite database
   vulnerability_data <- reactive({
-    db_path <- "data/vuln_reg/vuln_reg.db"
+    paths <- get_file_paths("data/vuln_reg/vuln_reg.db")
     query <- "
       SELECT L.CVE_LOC, L.NOM_LOC, M.NOM_MUN, E.NOM_ENT, 
            L.deci_lat, L.deci_lon, L.POBTOT,
@@ -489,7 +709,7 @@ function(input, output, session) {
       JOIN ENTIDAD E ON M.CVE_ENT = E.CVE_ENT
       JOIN SCENARIO S ON R.id_scenario = S.id_scenario
     "
-    load_db_data(db_path, query)
+    load_db_data(paths$file_path, query)
   })
   
   # Get unique entities for selector
@@ -666,7 +886,16 @@ function(input, output, session) {
   
   # List available species with distribution HTML maps
   dist_html_species <- reactive({
-    map_files <- list.files("data/cam_dist/mod_dist", pattern = "\\.html$", full.names = FALSE)
+    paths <- get_file_paths("data/cam_dist/mod_dist")
+    
+    if(paths$using_www) {
+      # Si estamos usando estructura www
+      map_files <- list.files(path = paths$file_path, pattern = "\\.html$", full.names = FALSE)
+    } else {
+      # Estructura original
+      map_files <- list.files("data/cam_dist/mod_dist", pattern = "\\.html$", full.names = FALSE)
+    }
+    
     species <- tools::file_path_sans_ext(map_files)
     return(species)
   })
@@ -683,14 +912,22 @@ function(input, output, session) {
   output$dist_html_map <- renderUI({
     req(input$dist_html_species)
     
-    html_path <- file.path("data/cam_dist/mod_dist", paste0(input$dist_html_species, ".html"))
-    if (!file.exists(html_path)) {
+    paths <- get_file_paths("data/cam_dist/mod_dist", paste0(input$dist_html_species, ".html"))
+    
+    if (!file.exists(paths$file_path)) {
       return(HTML("<div class='alert alert-warning'>Distribution map not found for selected species.</div>"))
+    }
+    
+    # Si estamos usando estructura www, la URL es relativa a www
+    if(paths$using_www) {
+      html_url <- paths$url_path
+    } else {
+      html_url <- paths$file_path
     }
     
     # Embed HTML map in an iframe
     tags$iframe(
-      src = html_path,
+      src = html_url,
       width = "100%",
       height = "600px",
       style = "border: none;"
@@ -699,25 +936,60 @@ function(input, output, session) {
   
   # List available species with CSV distribution data
   dist_csv_species <- reactive({
-    csv_files <- list_files_with_ext("data/cam_dist/ocurr_dist", "csv")
-    species <- sapply(csv_files, extract_filename)
-    return(species)
+    paths <- get_file_paths("data/cam_dist/ocurr_dist")
+    
+    if(paths$using_www) {
+      # Si estamos usando estructura www
+      csv_files <- list.files(path = paths$file_path, pattern = "\\.csv$", full.names = FALSE)
+      species <- tools::file_path_sans_ext(csv_files)
+    } else {
+      # Estructura original
+      csv_files <- list_files_with_ext("data/cam_dist/ocurr_dist", "csv")
+      species <- sapply(csv_files, extract_filename)
+    }
+    
+    # Limpiar los nombres para mostrar solo el nombre de la especie
+    display_names <- sapply(species, function(sp) {
+      # Eliminar cualquier parte de ruta que pueda quedar
+      sp_name <- basename(sp)
+      # Reemplazar guiones bajos por espacios y formatear con mayúscula inicial
+      sp_name <- gsub("_", " ", sp_name)
+      sp_name <- tools::toTitleCase(sp_name)
+      return(sp_name)
+    })
+    
+    # Crear un vector nombrado para asociar nombres de visualización con archivos
+    result <- species
+    names(result) <- display_names
+    
+    return(result)
   })
-  
   # Update species selector for CSV distribution maps
   observe({
     species <- dist_csv_species()
-    updateSelectInput(session, "dist_csv_species", 
+    if(length(species) > 0) {
+      updateSelectInput(session, "dist_csv_species", 
                       choices = species,
-                      selected = if(length(species) > 0) species[1] else NULL)
+                      selected = species[1],
+                      label = "Especie:")
+    }
   })
   
-  # Generate  map from CSV data
+  # Generate map from CSV data
   output$dist_csv_map <- renderLeaflet({
     req(input$dist_csv_species)
     
-    csv_path <- file.path("data/cam_dist/ocurr_dist", paste0(input$dist_csv_species, ".csv"))
-    if (!file.exists(csv_path)) {
+    # Obtener el nombre de archivo sin el nombre de visualización
+    species_file <- input$dist_csv_species
+    # Extraer el nombre para el popup
+    species_display_name <- names(which(dist_csv_species() == species_file))
+    if(length(species_display_name) == 0) {
+      species_display_name <- gsub("_", " ", species_file)
+    }
+    
+    paths <- get_file_paths("data/cam_dist/ocurr_dist", paste0(species_file, ".csv"))
+    
+    if (!file.exists(paths$file_path)) {
       return(leaflet() %>% 
                 addTiles() %>% 
                 setView(lng = -102.5, lat = 23.6, zoom = 5) %>%
@@ -728,15 +1000,20 @@ function(input, output, session) {
     }
     
     # Leer el CSV directamente con R
-    data <- read.csv(csv_path)
+    data <- read.csv(paths$file_path)
     
     leaflet(data) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
-      setView(lng = mean(data$longitude), lat = mean(data$latitude), zoom = 5) %>%
-      addMarkers(
-        lng = ~longitude,
-        lat = ~latitude,
-        popup = ~paste0(input$dist_csv_species, ": ", location)
+      setView(lng = mean(data$Longitud), lat = mean(data$Latitud), zoom = 5) %>%
+      addCircleMarkers(
+        lng = ~Longitud,
+        lat = ~Latitud,
+        popup = species_display_name,
+        radius = 5,
+        fillOpacity = 0.8,
+        stroke = TRUE,
+        color = "#3D5A80",
+        weight = 1
       )
   })
   
@@ -744,7 +1021,8 @@ function(input, output, session) {
   
   # Load workshops data
   workshops_data <- reactive({
-    safe_read_csv("data/talleres/talleres.csv")
+    paths <- get_file_paths("data/talleres/talleres.csv") 
+    safe_read_csv(paths$file_path)
   })
   
   # Get unique cooperatives for selector
@@ -812,13 +1090,13 @@ function(input, output, session) {
     content = function(file) {
       # Get data based on current tab
       data <- switch(input$mainTabs,
-                     "Executive Summary" = exec_summary_data(),
-                     "Environmental Variables" = env_data(),
-                     "Adaptation Actions" = filtered_adaptation_data(),
-                     "Population Growth and Size" = filtered_population_data(),
-                     "Capture Determinants" = filtered_capture_data(),
-                     "Regional Vulnerability" = filtered_vulnerability_data(),
-                     "Workshops" = filtered_workshops_data(),
+                     "summary" = exec_summary_data(),
+                     "environment" = env_data(),
+                     "adaptation" = filtered_adaptation_data(),
+                     "population" = filtered_population_data(),
+                     "capture" = filtered_capture_data(),
+                     "vulnerability" = filtered_vulnerability_data(),
+                     "workshops" = filtered_workshops_data(),
                      NULL)
       
       if (!is.null(data)) {
@@ -840,20 +1118,29 @@ function(input, output, session) {
     content = function(file) {
       # Create a temporary file for the report
       temp_report <- file.path(tempdir(), "report_template.Rmd")
-      file.copy("report_template.Rmd", temp_report, overwrite = TRUE)
+      
+      # Determinar ruta correcta para report_template.Rmd
+      standard_path <- "report_template.Rmd"
+      www_path <- "www/report_template.Rmd"
+      
+      if(file.exists(www_path)) {
+        file.copy(www_path, temp_report, overwrite = TRUE)
+      } else {
+        file.copy(standard_path, temp_report, overwrite = TRUE)
+      }
       
       # Parameters for the report based on current tab
       params <- list(
         report_title = paste("Fisheries and Climate Vulnerability Report -", input$mainTabs),
         tab = input$mainTabs,
         data = switch(input$mainTabs,
-                     "Executive Summary" = exec_summary_data(),
-                     "Environmental Variables" = env_data(),
-                     "Adaptation Actions" = filtered_adaptation_data(),
-                     "Population Growth and Size" = filtered_population_data(),
-                     "Capture Determinants" = filtered_capture_data(),
-                     "Regional Vulnerability" = filtered_vulnerability_data(),
-                     "Workshops" = filtered_workshops_data(),
+                     "summary" = exec_summary_data(),
+                     "environment" = env_data(),
+                     "adaptation" = filtered_adaptation_data(),
+                     "population" = filtered_population_data(),
+                     "capture" = filtered_capture_data(),
+                     "vulnerability" = filtered_vulnerability_data(),
+                     "workshops" = filtered_workshops_data(),
                      NULL),
         date = format(Sys.time(), "%B %d, %Y")
       )

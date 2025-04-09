@@ -155,6 +155,7 @@ venv.bak/
 *.xls
 *.csv
 *.json
+*.html
 
 # mypy
 .mypy_cache/

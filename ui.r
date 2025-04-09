@@ -9,6 +9,7 @@ library(plotly)
 library(shinyjs)
 library(htmltools)
 library(scales)
+library(shinycssloaders)
 
 # UI Definition
 ui <- fluidPage(
@@ -25,107 +26,133 @@ ui <- fluidPage(
       titlePanel("Evaluación de Pesquerías y Vulnerabilidad Climática")
   ),
   
-  # Main layout
+  # Horizontal navigation bar
+  navbarPage(
+    title = NULL,
+    id = "mainTabs",
+    tabPanel("Resumen ejecutivo", value = "summary"),
+    tabPanel("Variables ambientales", value = "environment"),
+    tabPanel("Riesgo por especies", value = "risk"),
+    tabPanel("Mapas de áreas potenciales de pesca", value = "fishing"),
+    tabPanel("Acciones de adaptación", value = "adaptation"),
+    tabPanel("Crecimiento y tamaño de la población", value = "population"),
+    tabPanel("Determinantes de captura", value = "capture"),
+    tabPanel("Vulnerabilidad regional", value = "vulnerability"),
+    tabPanel("Mapas de cambios en distribución", value = "distribution"),
+    tabPanel("Talleres", value = "workshops")
+  ),
+  
+  # Main content area with sidebar layout
   sidebarLayout(
-    # Sidebar panel
+    # Sidebar panel with filters
     sidebarPanel(
       width = 3,
-      div(class = "logo-container-sidebar",
-          tags$img(src = "logo1.png", width = "65%", class = "logo")
-      ),
       
-      # Section navigation
-      selectInput("mainTabs", "Sección:",
-                  choices = c(
-                    "Resumen Ejecutivo" = "summary",
-                    "Variables Ambientales" = "environment",
-                    "Riesgo por Especies" = "risk",
-                    "Áreas Potenciales de Pesca" = "fishing",
-                    "Acciones de Adaptación" = "adaptation",
-                    "Crecimiento y Tamaño de Población" = "population",
-                    "Determinantes de Captura" = "capture",
-                    "Vulnerabilidad Regional" = "vulnerability",
-                    "Cambios en Distribución" = "distribution",
-                    "Talleres" = "workshops"
-                  ),
-                  selected = "summary"
-      ),
+            
+      # Label for filters section
+      h4("Filtros:", class = "filter-heading"),
       
-      # Dynamic filters based on selected section
+      # Environmental Variables Filters
       conditionalPanel(
         condition = "input.mainTabs === 'environment'",
-        selectInput("env_entity", "Seleccionar Entidad:", choices = NULL),
-        selectInput("env_variable", "Seleccionar Variable:", choices = NULL)
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'risk'",
-        selectInput("risk_species", "Seleccionar Especie:", choices = NULL)
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'fishing'",
-        selectInput("fishing_locality", "Seleccionar Localidad:", choices = NULL)
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'adaptation'",
-        selectInput("adaptation_cooperative", "Seleccionar Cooperativa:", choices = NULL)
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'population'",
-        selectInput("population_species", "Seleccionar Especie:", choices = NULL)
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'capture'",
-        selectInput("capture_species", "Seleccionar Especie:", choices = NULL)
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'vulnerability'",
-        selectInput("vuln_entity", "Seleccionar Entidad:", choices = NULL),
-        selectInput("vuln_municipality", "Seleccionar Municipio:", choices = NULL),
-        selectInput("vuln_scenario", "Seleccionar Escenario Climático:",
-                    choices = c("Histórico" = "historical", 
-                                "SSP126" = "ssp126", 
-                                "SSP585" = "ssp585"),
-                    selected = "ssp585"),
-        selectInput("vuln_variable", "Seleccionar Variable:",
-                    choices = c("Vulnerabilidad" = "Vulnerabilidad",
-                                "Adaptabilidad" = "Adaptabilidad",
-                                "Exposición" = "Exposicion",
-                                "Sensibilidad" = "Sensibilidad"),
-                    selected = "Vulnerabilidad")
-      ),
-      
-      conditionalPanel(
-        condition = "input.mainTabs === 'distribution'",
-        selectInput("dist_tabs", "Tipo de Visualización:",
-                    choices = c("Modelos de Distribución" = "models", 
-                                "Datos de Ocurrencia" = "occurrence"),
-                    selected = "models"),
-        conditionalPanel(
-          condition = "input.dist_tabs === 'models'",
-          selectInput("dist_html_species", "Seleccionar Especie:", choices = NULL)
-        ),
-        conditionalPanel(
-          condition = "input.dist_tabs === 'occurrence'",
-          selectInput("dist_csv_species", "Seleccionar Especie:", choices = NULL)
+        div(class = "filter-section",
+          selectInput("env_entity", "Entidad:", choices = NULL),
+          h5("Variables:"),
+          checkboxGroupInput("env_variables", NULL, 
+                           choices = c("Temperatura (C)", "Clorofila (mg/m3)", "PDO", "MEI"),
+                           selected = "Temperatura (C)")
         )
       ),
       
+      # Species Risk Filters
       conditionalPanel(
-        condition = "input.mainTabs === 'workshops'",
-        selectInput("workshops_cooperative", "Seleccionar Cooperativa:", choices = NULL)
+        condition = "input.mainTabs === 'risk'",
+        div(class = "filter-section",
+          selectInput("risk_species", "Especie:", choices = NULL)
+        )
       ),
       
-      tags$hr(),
+      # Fishing Areas Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'fishing'",
+        div(class = "filter-section",
+          selectInput("fishing_locality", "Localidad:", choices = NULL)
+        )
+      ),
       
-      # Download buttons
-      div(class = "download-buttons",
-          style = "display: flex; flex-direction: column; gap: 10px;",
+      # Adaptation Actions Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'adaptation'",
+        div(class = "filter-section",
+          selectInput("adaptation_cooperative", "Cooperativa:", choices = NULL)
+        )
+      ),
+      
+      # Population Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'population'",
+        div(class = "filter-section",
+          selectInput("population_species", "Especie:", choices = NULL)
+        )
+      ),
+      
+      # Capture Determinants Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'capture'",
+        div(class = "filter-section",
+          selectInput("capture_species", "Especie:", choices = NULL)
+        )
+      ),
+      
+      # Vulnerability Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'vulnerability'",
+        div(class = "filter-section",
+          selectInput("vuln_entity", "Entidad:", choices = NULL),
+          selectInput("vuln_municipality", "Municipio:", choices = NULL),
+          selectInput("vuln_scenario", "Escenario Climático:",
+                     choices = c("Histórico" = "historical", 
+                                "SSP126" = "ssp126", 
+                                "SSP585" = "ssp585"),
+                     selected = "ssp585"),
+          selectInput("vuln_variable", "Variable:",
+                     choices = c("Vulnerabilidad" = "Vulnerabilidad",
+                                "Adaptabilidad" = "Adaptabilidad",
+                                "Exposición" = "Exposicion",
+                                "Sensibilidad" = "Sensibilidad"),
+                     selected = "Vulnerabilidad")
+        )
+      ),
+      
+      # Distribution Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'distribution'",
+        div(class = "filter-section",
+          selectInput("dist_tabs", "Tipo de Visualización:",
+                    choices = c("Modelos de Distribución" = "models", 
+                               "Datos de Ocurrencia" = "occurrence"),
+                    selected = "models"),
+          conditionalPanel(
+            condition = "input.dist_tabs === 'models'",
+            selectInput("dist_html_species", "Especie:", choices = NULL)
+          ),
+          conditionalPanel(
+            condition = "input.dist_tabs === 'occurrence'",
+            selectInput("dist_csv_species", "Especie:", choices = NULL)
+          )
+        )
+      ),
+      
+      # Workshops Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'workshops'",
+        div(class = "filter-section",
+          selectInput("workshops_cooperative", "Cooperativa:", choices = NULL)
+        )
+      ),
+      
+      # Download and methodology buttons at bottom of sidebar
+      div(class = "sidebar-buttons",
           downloadButton(
             outputId = "download_report",
             label = "Descargar Reporte",
@@ -135,14 +162,10 @@ ui <- fluidPage(
             outputId = "download_data",
             label = "Descargar Datos",
             class = "btn-download"
-          )
-      ),
-      
-      div(class = "report-instructions",
-          style = "margin-top: 15px; font-size: 0.9em; color: #4a5568;",
+          ),
           actionButton("show_methodology", "Metodología", 
-                      class = "btn-block",
-                      icon = icon("info-circle"))
+                     class = "btn-info",
+                     icon = icon("info-circle"))
       )
     ),
     
@@ -258,7 +281,7 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.mainTabs === 'distribution'",
         div(class = "tab-content",
-            h3("Cambios en Distribución", class = "section-title"),
+            h3("Mapas de Cambios en Distribución", class = "section-title"),
             
             conditionalPanel(
               condition = "input.dist_tabs === 'models'",
@@ -292,7 +315,8 @@ ui <- fluidPage(
         div(class = "footer-content",
             div(class = "logo-row",
                 tags$img(src = "logo1.png", class = "partner-logo"),
-                tags$img(src = "logo2.png", class = "partner-logo")
+                tags$img(src = "logo2.png", class = "partner-logo"),
+                tags$img(src = "logo3.png", class = "partner-logo")
             ),
             div(class = "copyright",
                 p("© 2024 WWF Dashboard. All Rights Reserved.")
