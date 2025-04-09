@@ -37,7 +37,7 @@ ui <- fluidPage(
     tabPanel("Acciones de adaptación", value = "adaptation"),
     tabPanel("Crecimiento y tamaño de la población", value = "population"),
     tabPanel("Determinantes de captura", value = "capture"),
-    tabPanel("Vulnerabilidad regional", value = "vulnerability"),
+    tabPanel("Mapa Vulnerabilidad regional", value = "vulnerability"),
     tabPanel("Mapas de cambios en distribución", value = "distribution"),
     tabPanel("Talleres", value = "workshops")
   ),
@@ -233,9 +233,11 @@ ui <- fluidPage(
         condition = "input.mainTabs === 'population'",
         div(class = "tab-content",
             h3("Crecimiento y Tamaño de la Población", class = "section-title"),
-            withSpinner(DTOutput("population_table"))
+            uiOutput("combined_cards")
         )
       ),
+
+
       
       # Capture Determinants
       conditionalPanel(
