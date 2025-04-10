@@ -978,7 +978,7 @@ function(input, output, session) {
   # (a) Leemos la tabla7.csv para usarla en la info filtrada
   tabla7_data <- reactive({
     # Ajusta la ruta si la tabla7.csv está en otro sitio
-    paths <- get_file_paths("data", "/cam_dist/tabla7.csv")
+    paths <- get_file_paths("data", "cam_dist/tabla7.csv")
     df <- safe_read_csv(paths$file_path)
     df
   })
