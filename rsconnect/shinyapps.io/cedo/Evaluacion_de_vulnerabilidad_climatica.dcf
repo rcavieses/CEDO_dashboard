@@ -1,0 +1,12 @@
+name: Evaluacion_de_vulnerabilidad_climatica
+title: Evaluacion_de_vulnerabilidad_climatica
+username: cedo
+account: cedo
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14484302
+bundleId: 10089304
+url: https://cedo.shinyapps.io/Evaluacion_de_vulnerabilidad_climatica/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

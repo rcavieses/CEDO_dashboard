@@ -23,7 +23,7 @@ ui <- fluidPage(
   
   # Header with title
   div(class = "dashboard-header",
-      titlePanel("Evaluación de Pesquerías y Vulnerabilidad Climática")
+      titlePanel("Evaluaciones de las pesquerías, riesgo socioeconómico, biológico y recomendaciones de medidas de adaptación para comunidades costeras selectas en México")
   ),
   
   # Horizontal navigation bar
@@ -100,7 +100,7 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.mainTabs === 'capture'",
         div(class = "filter-section",
-          selectInput("capture_species", "Especie:", choices = NULL)
+          selectInput("capture_species", "Seleccionar Especie:", choices = NULL)
         )
       ),
       
@@ -143,16 +143,8 @@ ui <- fluidPage(
       
       # Download and methodology buttons at bottom of sidebar
       div(class = "sidebar-buttons",
-          downloadButton(
-            outputId = "download_report",
-            label = "Descargar Reporte",
-            class = "btn-download"
-          ),
-          downloadButton(
-            outputId = "download_data",
-            label = "Descargar Datos",
-            class = "btn-download"
-          ),
+         uiOutput("download_report"),
+          uiOutput("download_data"),
           actionButton("show_methodology", "Metodología", 
                      class = "btn-info",
                      icon = icon("info-circle"))
@@ -234,6 +226,11 @@ ui <- fluidPage(
         condition = "input.mainTabs === 'capture'",
         div(class = "tab-content",
             h3("Determinantes de la Captura", class = "section-title"),
+            
+            # Texto explicativo
+            uiOutput("capture_explanation"),
+            
+            # Tabla de datos
             withSpinner(DTOutput("capture_table"))
         )
       ),
@@ -289,9 +286,13 @@ ui <- fluidPage(
         condition = "input.mainTabs === 'workshops'",
         div(class = "tab-content",
             h3("Talleres", class = "section-title"),
-            withSpinner(DTOutput("workshops_table")),
+            
+            # Panel con el nombre de la cooperativa y los bloques
+            withSpinner(uiOutput("workshops_panel")),
+            
+            # Muestra el número de filas filtradas
             div(class = "help-text", 
-                "Total de talleres realizados: ", 
+                "Total de registros filtrados: ", 
                 textOutput("workshops_count", inline = TRUE))
         )
       )

@@ -726,27 +726,33 @@ function(input, output, session) {
 
   # 7. Capture Determinants ---------------------------------------------------
   
-  # Load capture determinants data
+ # Load capture determinants data
   capture_data <- reactive({
-    paths <- get_file_paths("data/det_cap/determinantes_captura.csv")
+    paths <- get_file_paths("data/det_cap", "determinantes_captura.csv")
     safe_read_csv(paths$file_path)
   })
   
   # Get unique species for selector
   capture_species <- reactive({
     data <- capture_data()
-    if (!is.null(data) && "species" %in% colnames(data)) {
-      return(sort(unique(data$species)))
+    if (!is.null(data) && "Especie" %in% colnames(data)) {
+      return(sort(unique(data$Especie)))
     }
     return(character(0))
   })
   
   # Update species selector for capture determinants
+  # No mostrar "All" y seleccionar la primera especie por defecto
   observe({
     species <- capture_species()
+    
+    # Seleccionar la primera especie por defecto si hay especies disponibles
+    default_selection <- if(length(species) > 0) species[1] else NULL
+    
     updateSelectInput(session, "capture_species", 
-                      choices = c("All" = "all", species),
-                      selected = "all")
+                      choices = species,
+                      selected = default_selection,
+                      label = "Seleccionar Especie:")
   })
   
   # Filter capture data based on selected species
@@ -754,36 +760,126 @@ function(input, output, session) {
     data <- capture_data()
     if (is.null(data)) return(NULL)
     
-    if (input$capture_species != "all") {
-      data <- data %>% filter(species == input$capture_species)
-    }
-    
-    return(data)
+    req(input$capture_species)
+    data %>% filter(Especie == input$capture_species)
   })
   
-  # Render capture determinants table
+  # Añadir texto explicativo sobre la tabla de determinantes
+  output$capture_explanation <- renderUI({
+    tags$div(
+      class = "explanation-box",
+      style = "background-color: #f8f9fa; border-left: 4px solid #2874A6; padding: 15px; margin-bottom: 20px; border-radius: 4px;",
+      
+      tags$h4("Interpretación de los datos:", style = "margin-top: 0; color: #2874A6;"),
+      
+      tags$p(
+        "Esta tabla muestra los determinantes de captura para la especie seleccionada, destacando:", 
+        style = "margin-bottom: 10px;"
+      ),
+      
+      tags$ul(
+        tags$li(
+          tags$strong("Tendencia temporal:"), 
+          "Se muestra la tasa de cambio anual (kg/año) con ", 
+          tags$span("valores positivos en verde", style = "color: green; font-weight: bold"), 
+          " (aumento de captura) y ",
+          tags$span("valores negativos en naranja", style = "color: orange; font-weight: bold"),
+          " (disminución)."
+        ),
+        
+        tags$li(
+          tags$strong("Factores influyentes:"), 
+          "Se divide la varianza explicada entre el esfuerzo pesquero (Días efectivos), condiciones locales (Temperatura y Clorofila) y condiciones regionales (MEI y PDO/ADO)."
+        ),
+        
+        tags$li(
+          tags$strong("CPUE:"), 
+          "Captura por unidad de esfuerzo (kg/día), otro indicador importante de la productividad pesquera."
+        )
+      )
+    )
+  })
+  
+  # Render capture determinants table with color coding
   output$capture_table <- renderDT({
     data <- filtered_capture_data()
     
     if (is.null(data) || nrow(data) == 0) {
-      return(data.frame(Message = "No capture determinants data available"))
+      return(data.frame(Message = "No hay datos disponibles para esta especie"))
     }
     
-    datatable(
+    # Renombrar columnas para eliminar guiones bajos
+    colnames(data) <- gsub("_", " ", colnames(data))
+    
+    # Crear la tabla
+    dt <- datatable(
       data,
       options = list(
-        pageLength = 10,
+        pageLength = 15,          # Mostrar más filas por página
         autoWidth = TRUE,
         scrollX = TRUE,
-        dom = 'Bfrtip',
-        buttons = c('copy', 'csv', 'excel')
+        dom = 't',                # Solo mostrar la tabla ('t'), sin filtros ni paginación
+        ordering = FALSE,         # Desactivar ordenamiento
+        searching = FALSE,        # Desactivar búsqueda
+        columnDefs = list(
+          list(className = 'dt-center', targets = "_all")  # Centrar todo el texto
+        )
       ),
       rownames = FALSE,
-      filter = 'top',
-      class = 'cell-border stripe'
+      filter = 'none',            # Quitar filtros
+      class = 'cell-border stripe',
+      selection = 'none',         # Desactivar selección de filas
+      caption = htmltools::tags$caption(
+        style = 'caption-side: bottom; text-align: left;',
+        htmltools::HTML("Se señala en color verde las tendencias positivas (aumento en la captura) y en naranja las negativas basadas en modelos de regresión para cada especie, tendencia de la captura (2018-2023) y división de la varianza explicada entre el esfuerzo pesquero, las condiciones locales (temperatura y concentración de clorofila) y las regionales (MEI y PDO/ADO)")
+      )
     )
+    
+    # Aplicar formato condicional para la columna de tasa de cambio anual
+    dt <- dt %>% 
+      formatStyle(
+        'Tasa de cambio anual kg año',  # Nombre de columna sin guiones bajos
+        backgroundColor = styleInterval(
+          cuts = 0,  # Valor de corte
+          values = c('#FFA07A', '#90EE90')  # Naranja claro para negativo, verde claro para positivo
+        ),
+        fontWeight = 'bold'
+      )
+    
+    # Aplicar formato condicional para la columna CPUE
+    dt <- dt %>% 
+      formatStyle(
+        'CPUE kg dia efectivo',  # Nombre de columna sin guiones bajos
+        backgroundColor = styleInterval(
+          cuts = 0,  # Valor de corte
+          values = c('#FFA07A', '#90EE90')  # Naranja claro para negativo, verde claro para positivo
+        ),
+        fontWeight = 'bold'
+      )
+    
+    # Aplicar formato condicional para otras columnas con valores numéricos que representan impacto
+    # Para Dias efectivos, Temperatura, Clorofila, MEI y ADO o PDO
+    value_columns <- c('Dias efectivos', 'Temperatura', 'Clorofila', 'MEI', 'ADO o PDO')
+    
+    for (col in value_columns) {
+      if (col %in% colnames(data)) {
+        dt <- dt %>% 
+          formatStyle(
+            col,
+            background = styleColorBar(
+              range(data[[col]], na.rm = TRUE), 
+              'lightblue'
+            ),
+            backgroundSize = '98% 88%',
+            backgroundRepeat = 'no-repeat',
+            backgroundPosition = 'center'
+          )
+      }
+    }
+    
+    dt
   })
-  
+    
   # 8. Regional Vulnerability -------------------------------------------------
   
   # Load vulnerability data from SQLite database
@@ -1168,142 +1264,134 @@ function(input, output, session) {
 
 
   # 10. Workshops -------------------------------------------------------------
-  
-  # Load workshops data
+  # 1. Carga de datos
   workshops_data <- reactive({
-    paths <- get_file_paths("data/talleres/talleres.csv") 
-    safe_read_csv(paths$file_path)
+    # Ajusta la ruta si la carpeta o el nombre del archivo difiere
+    paths <- get_file_paths("data/talleres", "talleres.csv") 
+    df <- safe_read_csv(paths$file_path)
+    df
   })
-  
-  # Get unique cooperatives for selector
+
+  # 2. Obtiene lista de cooperativas (usando la columna 'cooperativa')
   workshops_cooperatives <- reactive({
     data <- workshops_data()
-    if (!is.null(data) && "cooperativa" %in% colnames(data)) {
-      return(sort(unique(data$cooperativa)))
+    if (is.null(data)) return(character(0))
+    
+    # Ajustado a la columna 'cooperativa' (en minúsculas según la estructura del CSV)
+    if (!"cooperativa" %in% colnames(data)) {
+      warning("No se encontró la columna 'cooperativa'. Ajusta el nombre para que coincida con el CSV.")
+      return(character(0))
     }
-    return(character(0))
+    
+    sort(unique(data$cooperativa))
   })
-  
-  # Update cooperative selector for workshops
+
+  # 3. Observador: actualiza el selector de cooperativas (selecciona la primera al iniciar)
   observe({
     cooperatives <- workshops_cooperatives()
-    updateSelectInput(session, "workshops_cooperative", 
-                      choices = c("All" = "all", cooperatives),
-                      selected = "all")
+    updateSelectInput(
+      session,
+      "workshops_cooperative",
+      choices = cooperatives,
+      selected = if (length(cooperatives) > 0) cooperatives[1] else NULL
+    )
   })
-  
-  # Filter workshops data based on selected cooperative
+
+  # 4. Filtra los datos según la cooperativa escogida
   filtered_workshops_data <- reactive({
     data <- workshops_data()
     if (is.null(data)) return(NULL)
     
-    if (input$workshops_cooperative != "all") {
-      data <- data %>% filter(cooperativa == input$workshops_cooperative)
-    }
-    
-    return(data)
+    req(input$workshops_cooperative)
+    data[data$cooperativa == input$workshops_cooperative, , drop = FALSE]
   })
-  
-  # Render workshops table
-  output$workshops_table <- renderDT({
+
+  # 5. Definimos la agrupación de columnas basada en las columnas disponibles
+  info_general_cols <- c("Tipo de acción", "Origen de la acción")
+  acciones_cols     <- c("Acción recomendada", "Plazo temporal")
+  impacto_cols      <- c("Vinculación al PLECCA", "Impacto esperado")
+
+  # 6. Renderizamos el panel principal con el nombre de la cooperativa + secciones
+  output$workshops_panel <- renderUI({
     data <- filtered_workshops_data()
     
     if (is.null(data) || nrow(data) == 0) {
-      return(data.frame(Message = "No workshops data available"))
+      return(HTML("<div class='alert alert-warning'>No hay datos para la cooperativa seleccionada.</div>"))
     }
     
-    datatable(
-      data,
-      options = list(
-        pageLength = 10,
-        autoWidth = TRUE,
-        scrollX = TRUE,
-        dom = 'Bfrtip',
-        buttons = c('copy', 'csv', 'excel')
-      ),
-      rownames = FALSE,
-      filter = 'top',
-      class = 'cell-border stripe'
+    # Título con el nombre de la cooperativa
+    coop_title <- h2(paste("Cooperativa:", input$workshops_cooperative))
+    
+    # Supongamos que solo mostramos la primera fila (si hubiera varias,
+    # podríamos iterar sobre cada fila o pedirle al usuario seleccionar un registro).
+    row_data <- data[1, , drop = FALSE]
+    
+    # Función auxiliar para generar un bloque con un título y columnas
+    create_block <- function(block_title, col_names, color_bar = "#2874A6") {
+      # Filtramos solo las columnas que existan en row_data y que estén en col_names
+      valid_cols <- intersect(col_names, names(row_data))
+      if (length(valid_cols) == 0) return(NULL)
+      
+      div(
+        style = "background-color: #FAFAFA; padding: 15px; margin-bottom: 20px; border-radius: 6px;",
+        h3(block_title),
+        fluidRow(
+          lapply(valid_cols, function(col) {
+            val <- row_data[[col]]
+            column(
+              width = 4,  # Ajusta el ancho de cada columna
+              div(
+                style = paste0("border-left: 4px solid ", color_bar, 
+                              "; padding-left: 10px; margin-bottom: 10px;"),
+                h4(col, style = "margin-top: 0;"),
+                div(style = "font-weight: bold;", as.character(val))
+              )
+            )
+          })
+        )
+      )
+    }
+    
+    # Creamos los tres bloques adaptados a las nuevas columnas
+    block_general <- create_block("Información general", info_general_cols, color_bar = "#2874A6")
+    block_acciones <- create_block("Acciones recomendadas", acciones_cols, color_bar = "#27AE60")
+    block_impacto <- create_block("Impacto y vinculación", impacto_cols, color_bar = "#D35400")
+    
+    # Construimos la salida final
+    tagList(
+      coop_title,
+      block_general,
+      block_acciones,
+      block_impacto
     )
   })
-  
+    
   # Download handlers ---------------------------------------------------------
-  
-  # Download data from current view
-  output$download_data <- downloadHandler(
-    filename = function() {
-      paste0("fisheries_data_", 
-             gsub(" ", "_", tolower(input$mainTabs)), "_",
-             format(Sys.time(), "%Y%m%d-%H%M"), 
-             ".csv")
-    },
-    content = function(file) {
-      # Get data based on current tab
-      data <- switch(input$mainTabs,
-                     "summary" = exec_summary_data(),
-                     "environment" = env_data(),
-                     "adaptation" = filtered_adaptation_data(),
-                     "population" = filtered_population_data(),
-                     "capture" = filtered_capture_data(),
-                     "vulnerability" = filtered_vulnerability_data(),
-                     "workshops" = filtered_workshops_data(),
-                     NULL)
-      
-      if (!is.null(data)) {
-        write.csv(data, file, row.names = FALSE)
-      } else {
-        write.csv(data.frame(message = "No data available to download"), file, row.names = FALSE)
-      }
-    }
-  )
-  
-  # Download report in HTML format
-  output$download_report <- downloadHandler(
-    filename = function() {
-      paste0("fisheries_report_", 
-             gsub(" ", "_", tolower(input$mainTabs)), "_",
-             format(Sys.time(), "%Y%m%d-%H%M"), 
-             ".html")
-    },
-    content = function(file) {
-      # Create a temporary file for the report
-      temp_report <- file.path(tempdir(), "report_template.Rmd")
-      
-      # Determinar ruta correcta para report_template.Rmd
-      standard_path <- "report_template.Rmd"
-      www_path <- "www/report_template.Rmd"
-      
-      if(file.exists(www_path)) {
-        file.copy(www_path, temp_report, overwrite = TRUE)
-      } else {
-        file.copy(standard_path, temp_report, overwrite = TRUE)
-      }
-      
-      # Parameters for the report based on current tab
-      params <- list(
-        report_title = paste("Fisheries and Climate Vulnerability Report -", input$mainTabs),
-        tab = input$mainTabs,
-        data = switch(input$mainTabs,
-                     "summary" = exec_summary_data(),
-                     "environment" = env_data(),
-                     "adaptation" = filtered_adaptation_data(),
-                     "population" = filtered_population_data(),
-                     "capture" = filtered_capture_data(),
-                     "vulnerability" = filtered_vulnerability_data(),
-                     "workshops" = filtered_workshops_data(),
-                     NULL),
-        date = format(Sys.time(), "%B %d, %Y")
-      )
-      
-      # Render the report
-      withProgress(message = 'Generating report...', {
-        rmarkdown::render(temp_report, 
-                          output_file = file,
-                          params = params,
-                          envir = new.env(parent = globalenv()))
-      })
-    }
-  )
+  # 1. Reemplazamos el botón de "Descargar Reporte" con un enlace a Google Drive
+  output$download_report <- renderUI({
+    # Ajusta esta URL a la de tu archivo en Google Drive
+    google_drive_url <- "https://docs.google.com/document/d/1645zm7fnmqksrKUbwsoJ-2CSI5NOlT11KJt2HIKH8wY/edit?usp=sharing"
+
+    tags$a(
+      href = google_drive_url,
+      class = "btn btn-download",    # Clase CSS que usabas antes para estilizar
+      target = "_blank",             # Abre en una nueva pestaña/ventana
+      "Descargar Reporte"            # Texto que se mostrará en el botón
+    )
+  })
+
+  # 2. Reemplazamos el botón de "Descargar Datos" con un enlace a Zenodo
+  output$download_data <- renderUI({
+    # Ajusta esta URL de Zenodo a tu DOI o archivo específico
+    zenodo_url <- "https://drive.google.com/drive/folders/1IiJIfAkTDK-ro8wEGhbHSTmebjw5XVA_"
+
+    tags$a(
+      href = zenodo_url,
+      class = "btn btn-download",
+      target = "_blank",
+      "Descargar Datos"
+    )
+  })
   
   # Element counters ----------------------------------------------------------
   
