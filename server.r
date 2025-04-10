@@ -974,28 +974,34 @@ function(input, output, session) {
   })
   
   # 9. Distribution Changes ---------------------------------------------------
-  
+
   # (a) Leemos la tabla7.csv para usarla en la info filtrada
   tabla7_data <- reactive({
-    # Ajusta la ruta si la tabla7.csv está en otro sitio
-    paths <- get_file_paths("data", "cam_dist/tabla7.csv")
-    df <- safe_read_csv(paths$file_path)
+    csv_path <- "data/cam_dist/tabla7.csv"  # Ajusta según tu carpeta real
+    
+    # Checar si existe
+    if (!file.exists(csv_path)) {
+      warning("No se encontró el archivo: ", csv_path)
+      return(NULL)
+    }
+    
+    # Leer de manera segura
+    df <- safe_read_csv(csv_path)
     df
   })
 
-  # (b) Generamos la lista unificada de especies (con espacios) a partir de:
+  # (b) Generamos la lista unificada de especies:
   dist_species <- reactive({
-    # 1. Archivos HTML dentro de www
+    # 1. Archivos HTML (en carpeta www)
     html_files <- list.files(
       "www/data/cam_dist/mod_dist",
       pattern = "\\.html$",
       full.names = FALSE
     )
     sp_html_raw <- tools::file_path_sans_ext(html_files)
-    # Convertir underscores a espacios
     sp_html <- gsub("_", " ", sp_html_raw)
     
-    # 2. Archivos CSV fuera de www
+    # 2. Archivos CSV (fuera de www)
     csv_files <- list.files(
       "data/cam_dist/ocurr_dist",
       pattern = "\\.csv$",
@@ -1009,31 +1015,69 @@ function(input, output, session) {
     sort(especies)
   })
 
-  # (c) Filtramos la tabla7 con la especie seleccionada (que contiene espacios)
+  # (c) Filtramos tabla7 para la especie seleccionada
   filtered_tabla7 <- reactive({
     req(input$dist_species)
     df <- tabla7_data()
     if (is.null(df)) return(NULL)
     
-    # Se asume que en tabla7.csv la columna se llama "Especie" y usa espacios
+    # Filtrar filas de la especie (en la columna "Especie", que tiene espacios)
     df_filtrado <- df[df$Especie == input$dist_species, ]
+    cols_requeridas <- c("Porcentaje_cambio_SSP245", "Porcentaje_cambio_SSP585")
+    cols_encontradas <- intersect(cols_requeridas, names(df_filtrado))
+    if (length(cols_encontradas) == 0) {
+      return(NULL)
+    } else {
+      df_filtrado <- df_filtrado[, cols_encontradas, drop = FALSE]
+    }
+    
     df_filtrado
   })
 
-  # (d) Renderizamos la tabla7 filtrada
-  output$tabla7_filtered <- renderDT({
+  # (d) Renderizamos dos 'cajas' que muestran Porcentaje_cambio_SSP245 y Porcentaje_cambio_SSP585
+  output$tabla7_boxes <- renderUI({
     data <- filtered_tabla7()
+    
+    # Si no hay registros o no existen las columnas, mostramos advertencia
     if (is.null(data) || nrow(data) == 0) {
-      return(data.frame(Mensaje = "No hay registros en tabla7 para esta especie."))
+      return(HTML("<div class='alert alert-warning'>No hay registros en tabla7 para esta especie o faltan columnas requeridas.</div>"))
     }
-    datatable(
-      data,
-      options = list(pageLength = 5),
-      rownames = FALSE
+    
+    # Tomamos la primera fila (por si hubiera más de una)
+    row <- data[1, , drop = FALSE]
+    
+    val245 <- if ("Porcentaje_cambio_SSP245" %in% names(row)) row[["Porcentaje_cambio_SSP245"]] else NA
+    val585 <- if ("Porcentaje_cambio_SSP585" %in% names(row)) row[["Porcentaje_cambio_SSP585"]] else NA
+    
+    fluidRow(
+      column(
+        width = 6,
+        div(
+          style = "background-color: #edf2f7; border-left: 5px solid #2874A6; 
+                  border-radius: 8px; padding: 15px; margin-bottom: 20px;",
+          h4("Porcentaje cambio SSP245", style = "margin-top: 0;"),
+          div(
+            style = "font-size: 28px; font-weight: bold; color: #2874A6;",
+            paste0(val245, if (!is.na(val245) && is.numeric(val245)) "%" else "")
+          )
+        )
+      ),
+      column(
+        width = 6,
+        div(
+          style = "background-color: #edf2f7; border-left: 5px solid #D35400; 
+                  border-radius: 8px; padding: 15px; margin-bottom: 20px;",
+          h4("Porcentaje cambio SSP585", style = "margin-top: 0;"),
+          div(
+            style = "font-size: 28px; font-weight: bold; color: #D35400;",
+            paste0(val585, if (!is.na(val585) && is.numeric(val585)) "%" else "")
+          )
+        )
+      )
     )
   })
 
-  # (e) Observador para actualizar el selectInput con las especies (en modo espacios)
+  # (e) Observador para actualizar el selectInput con las especies en 'modo espacios'
   observe({
     species_list <- dist_species()
     updateSelectInput(
@@ -1044,11 +1088,11 @@ function(input, output, session) {
     )
   })
 
-  # (f) Mapa HTML embebido (usa la especie con espacios => la pasa a underscores para abrir archivo)
+  # (f) Mapa HTML embebido
+  #     Convertimos espacios a '_' para encontrar el .html en la carpeta www
   output$dist_html_map <- renderUI({
     req(input$dist_species)
     
-    # Convertimos espacios a guiones bajos para encontrar el .html
     sp_file <- gsub(" ", "_", input$dist_species)
     html_path <- file.path("www/data/cam_dist/mod_dist", paste0(sp_file, ".html"))
     
@@ -1056,7 +1100,7 @@ function(input, output, session) {
       return(HTML("<div class='alert alert-warning'>No se encontró el archivo HTML para esta especie.</div>"))
     }
     
-    # El src en iframe va relativo a www/, así que omitimos la parte "www/"
+    # Para el src, removemos el 'www/' para que sea relativo a la raíz de la app
     relative_url <- sub("^www/", "", html_path)
     
     tags$iframe(
@@ -1067,11 +1111,11 @@ function(input, output, session) {
     )
   })
 
-  # (g) Mapa CSV (Leaflet): también convierte espacios a guiones bajos al buscar el archivo
+  # (g) Mapa CSV (Leaflet)
+  #     Convertimos espacios a '_' para el .csv
   output$dist_csv_map <- renderLeaflet({
     req(input$dist_species)
     
-    # Convertimos espacios a guiones bajos
     sp_file <- gsub(" ", "_", input$dist_species)
     csv_path <- file.path("data/cam_dist/ocurr_dist", paste0(sp_file, ".csv"))
     
@@ -1106,7 +1150,7 @@ function(input, output, session) {
       )
   })
 
-  # (h) Componente UI que muestra ambos mapas en columnas
+  # (h) UI que muestra ambos mapas en columnas
   output$distribution_maps <- renderUI({
     req(input$dist_species)
     
@@ -1121,6 +1165,7 @@ function(input, output, session) {
       )
     )
   })
+
 
   # 10. Workshops -------------------------------------------------------------
   

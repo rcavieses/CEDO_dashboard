@@ -279,8 +279,8 @@ ui <- fluidPage(
             withSpinner(uiOutput("distribution_maps")),
             
             # Tabla con datos de tabla7 filtrada por la especie
-            h4("Información adicional de tabla7"),
-            withSpinner(DTOutput("tabla7_filtered"))
+            h4("Porcentaje de cambio en distribución:", style = "margin-top: 20px;"),
+            withSpinner(uiOutput("tabla7_boxes"))
         )
       ),
       
@@ -305,10 +305,11 @@ ui <- fluidPage(
             div(class = "logo-row",
                 tags$img(src = "logo1.png", class = "partner-logo"),
                 tags$img(src = "logo2.png", class = "partner-logo"),
-                tags$img(src = "logo3.png", class = "partner-logo")
+                tags$img(src = "logo3.png", class = "partner-logo"),
+                tags$img(src = "logo4.png", class = "partner-logo")
             ),
             div(class = "copyright",
-                p("© 2024 WWF Dashboard. All Rights Reserved.")
+                p("© 2025 CEDO intercultural. All Rights Reserved.")
             )
         )
     )
