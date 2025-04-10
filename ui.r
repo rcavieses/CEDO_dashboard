@@ -128,21 +128,11 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.mainTabs === 'distribution'",
         div(class = "filter-section",
-          selectInput("dist_tabs", "Tipo de Visualización:",
-                    choices = c("Modelos de Distribución" = "models", 
-                               "Datos de Ocurrencia" = "occurrence"),
-                    selected = "models"),
-          conditionalPanel(
-            condition = "input.dist_tabs === 'models'",
-            selectInput("dist_html_species", "Especie:", choices = NULL)
-          ),
-          conditionalPanel(
-            condition = "input.dist_tabs === 'occurrence'",
-            selectInput("dist_csv_species", "Especie:", choices = NULL)
-          )
+          # Selector unificado de especie
+          selectInput("dist_species", "Especie:", choices = NULL)
         )
       ),
-      
+            
       # Workshops Filters
       conditionalPanel(
         condition = "input.mainTabs === 'workshops'",
@@ -285,15 +275,12 @@ ui <- fluidPage(
         div(class = "tab-content",
             h3("Mapas de Cambios en Distribución", class = "section-title"),
             
-            conditionalPanel(
-              condition = "input.dist_tabs === 'models'",
-              withSpinner(uiOutput("dist_html_map"))
-            ),
+            # Ambos mapas en columnas (uiOutput("distribution_maps") se genera en server)
+            withSpinner(uiOutput("distribution_maps")),
             
-            conditionalPanel(
-              condition = "input.dist_tabs === 'occurrence'",
-              withSpinner(leafletOutput("dist_csv_map", height = "500px"))
-            )
+            # Tabla con datos de tabla7 filtrada por la especie
+            h4("Información adicional de tabla7"),
+            withSpinner(DTOutput("tabla7_filtered"))
         )
       ),
       

@@ -975,139 +975,153 @@ function(input, output, session) {
   
   # 9. Distribution Changes ---------------------------------------------------
   
-  # List available species with distribution HTML maps
-  dist_html_species <- reactive({
-    paths <- get_file_paths("data/cam_dist/mod_dist")
-    
-    if(paths$using_www) {
-      # Si estamos usando estructura www
-      map_files <- list.files(path = paths$file_path, pattern = "\\.html$", full.names = FALSE)
-    } else {
-      # Estructura original
-      map_files <- list.files("data/cam_dist/mod_dist", pattern = "\\.html$", full.names = FALSE)
-    }
-    
-    species <- tools::file_path_sans_ext(map_files)
-    return(species)
+  # (a) Leemos la tabla7.csv para usarla en la info filtrada
+  tabla7_data <- reactive({
+    # Ajusta la ruta si la tabla7.csv está en otro sitio
+    paths <- get_file_paths("data", "/cam_dist/tabla7.csv")
+    df <- safe_read_csv(paths$file_path)
+    df
   })
-  
-  # Update species selector for HTML distribution maps
+
+  # (b) Generamos la lista unificada de especies (con espacios) a partir de:
+  dist_species <- reactive({
+    # 1. Archivos HTML dentro de www
+    html_files <- list.files(
+      "www/data/cam_dist/mod_dist",
+      pattern = "\\.html$",
+      full.names = FALSE
+    )
+    sp_html_raw <- tools::file_path_sans_ext(html_files)
+    # Convertir underscores a espacios
+    sp_html <- gsub("_", " ", sp_html_raw)
+    
+    # 2. Archivos CSV fuera de www
+    csv_files <- list.files(
+      "data/cam_dist/ocurr_dist",
+      pattern = "\\.csv$",
+      full.names = FALSE
+    )
+    sp_csv_raw <- tools::file_path_sans_ext(csv_files)
+    sp_csv <- gsub("_", " ", sp_csv_raw)
+    
+    # 3. Unimos y ordenamos
+    especies <- union(sp_html, sp_csv)
+    sort(especies)
+  })
+
+  # (c) Filtramos la tabla7 con la especie seleccionada (que contiene espacios)
+  filtered_tabla7 <- reactive({
+    req(input$dist_species)
+    df <- tabla7_data()
+    if (is.null(df)) return(NULL)
+    
+    # Se asume que en tabla7.csv la columna se llama "Especie" y usa espacios
+    df_filtrado <- df[df$Especie == input$dist_species, ]
+    df_filtrado
+  })
+
+  # (d) Renderizamos la tabla7 filtrada
+  output$tabla7_filtered <- renderDT({
+    data <- filtered_tabla7()
+    if (is.null(data) || nrow(data) == 0) {
+      return(data.frame(Mensaje = "No hay registros en tabla7 para esta especie."))
+    }
+    datatable(
+      data,
+      options = list(pageLength = 5),
+      rownames = FALSE
+    )
+  })
+
+  # (e) Observador para actualizar el selectInput con las especies (en modo espacios)
   observe({
-    species <- dist_html_species()
-    updateSelectInput(session, "dist_html_species", 
-                      choices = species,
-                      selected = if(length(species) > 0) species[1] else NULL)
+    species_list <- dist_species()
+    updateSelectInput(
+      session,
+      "dist_species",
+      choices = species_list,
+      selected = if (length(species_list) > 0) species_list[1] else NULL
+    )
   })
-  
-  # Render HTML distribution map
+
+  # (f) Mapa HTML embebido (usa la especie con espacios => la pasa a underscores para abrir archivo)
   output$dist_html_map <- renderUI({
-    req(input$dist_html_species)
+    req(input$dist_species)
     
-    paths <- get_file_paths("data/cam_dist/mod_dist", paste0(input$dist_html_species, ".html"))
+    # Convertimos espacios a guiones bajos para encontrar el .html
+    sp_file <- gsub(" ", "_", input$dist_species)
+    html_path <- file.path("www/data/cam_dist/mod_dist", paste0(sp_file, ".html"))
     
-    if (!file.exists(paths$file_path)) {
-      return(HTML("<div class='alert alert-warning'>Distribution map not found for selected species.</div>"))
+    if (!file.exists(html_path)) {
+      return(HTML("<div class='alert alert-warning'>No se encontró el archivo HTML para esta especie.</div>"))
     }
     
-    # Si estamos usando estructura www, la URL es relativa a www
-    if(paths$using_www) {
-      html_url <- paths$url_path
-    } else {
-      html_url <- paths$file_path
-    }
+    # El src en iframe va relativo a www/, así que omitimos la parte "www/"
+    relative_url <- sub("^www/", "", html_path)
     
-    # Embed HTML map in an iframe
     tags$iframe(
-      src = html_url,
+      src = relative_url,
       width = "100%",
       height = "600px",
       style = "border: none;"
     )
   })
-  
-  # List available species with CSV distribution data
-  dist_csv_species <- reactive({
-    paths <- get_file_paths("data/cam_dist/ocurr_dist")
-    
-    if(paths$using_www) {
-      # Si estamos usando estructura www
-      csv_files <- list.files(path = paths$file_path, pattern = "\\.csv$", full.names = FALSE)
-      species <- tools::file_path_sans_ext(csv_files)
-    } else {
-      # Estructura original
-      csv_files <- list_files_with_ext("data/cam_dist/ocurr_dist", "csv")
-      species <- sapply(csv_files, extract_filename)
-    }
-    
-    # Limpiar los nombres para mostrar solo el nombre de la especie
-    display_names <- sapply(species, function(sp) {
-      # Eliminar cualquier parte de ruta que pueda quedar
-      sp_name <- basename(sp)
-      # Reemplazar guiones bajos por espacios y formatear con mayúscula inicial
-      sp_name <- gsub("_", " ", sp_name)
-      sp_name <- tools::toTitleCase(sp_name)
-      return(sp_name)
-    })
-    
-    # Crear un vector nombrado para asociar nombres de visualización con archivos
-    result <- species
-    names(result) <- display_names
-    
-    return(result)
-  })
-  # Update species selector for CSV distribution maps
-  observe({
-    species <- dist_csv_species()
-    if(length(species) > 0) {
-      updateSelectInput(session, "dist_csv_species", 
-                      choices = species,
-                      selected = species[1],
-                      label = "Especie:")
-    }
-  })
-  
-  # Generate map from CSV data
+
+  # (g) Mapa CSV (Leaflet): también convierte espacios a guiones bajos al buscar el archivo
   output$dist_csv_map <- renderLeaflet({
-    req(input$dist_csv_species)
+    req(input$dist_species)
     
-    # Obtener el nombre de archivo sin el nombre de visualización
-    species_file <- input$dist_csv_species
-    # Extraer el nombre para el popup
-    species_display_name <- names(which(dist_csv_species() == species_file))
-    if(length(species_display_name) == 0) {
-      species_display_name <- gsub("_", " ", species_file)
+    # Convertimos espacios a guiones bajos
+    sp_file <- gsub(" ", "_", input$dist_species)
+    csv_path <- file.path("data/cam_dist/ocurr_dist", paste0(sp_file, ".csv"))
+    
+    if (!file.exists(csv_path)) {
+      return(
+        leaflet() %>%
+          addTiles() %>%
+          setView(lng = -102.5, lat = 23.6, zoom = 5) %>%
+          addControl(
+            html = "<div class='alert alert-warning'>No se encontró el CSV de ocurrencia para esta especie.</div>",
+            position = "topright"
+          )
+      )
     }
     
-    paths <- get_file_paths("data/cam_dist/ocurr_dist", paste0(species_file, ".csv"))
-    
-    if (!file.exists(paths$file_path)) {
-      return(leaflet() %>% 
-                addTiles() %>% 
-                setView(lng = -102.5, lat = 23.6, zoom = 5) %>%
-                addControl(
-                  html = "<div class='alert alert-warning'>Datos de distribución no encontrados para la especie seleccionada.</div>",
-                  position = "topright"
-                ))
-    }
-    
-    # Leer el CSV directamente con R
-    data <- read.csv(paths$file_path)
-    
+    data <- read.csv(csv_path)
     leaflet(data) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
-      setView(lng = mean(data$Longitud), lat = mean(data$Latitud), zoom = 5) %>%
+      setView(
+        lng = mean(data$Longitud, na.rm = TRUE),
+        lat = mean(data$Latitud, na.rm = TRUE),
+        zoom = 5
+      ) %>%
       addCircleMarkers(
         lng = ~Longitud,
         lat = ~Latitud,
-        popup = species_display_name,
+        popup = paste("Especie:", input$dist_species),
         radius = 5,
         fillOpacity = 0.8,
-        stroke = TRUE,
         color = "#3D5A80",
         weight = 1
       )
   })
-  
+
+  # (h) Componente UI que muestra ambos mapas en columnas
+  output$distribution_maps <- renderUI({
+    req(input$dist_species)
+    
+    fluidRow(
+      column(
+        width = 6,
+        uiOutput("dist_html_map")
+      ),
+      column(
+        width = 6,
+        leafletOutput("dist_csv_map", height = "600px")
+      )
+    )
+  })
+
   # 10. Workshops -------------------------------------------------------------
   
   # Load workshops data
