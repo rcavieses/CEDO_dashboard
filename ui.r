@@ -18,12 +18,42 @@ ui <- fluidPage(
   # Custom CSS and fonts
   tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "styles.css"),
-    tags$link(href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap", rel = "stylesheet")
+    tags$link(href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap", rel = "stylesheet"),
+    # Agregar Font Awesome para los iconos
+    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css")
+  ),
+  
+  # Barra de contacto
+  div(class = "contact-top-bar",
+      div(class = "contact-container",
+          # Lado izquierdo - Información de contacto
+          div(class = "contact-info",
+              a(href = "mailto:info@cedo.org", 
+                icon("envelope"), " info@cedo.org", 
+                class = "contact-item"),
+              a(href = "tel:+1-52-638-382-0113", 
+                icon("phone"), " +1 52 638-382-0113 y 0115", 
+                class = "contact-item")
+          ),
+          # Lado derecho - Redes sociales
+          div(class = "social-icons",
+              a(href = "https://www.facebook.com/www.cedo.org", target = "_blank", 
+                icon("facebook-f"), class = "social-icon"),
+              a(href = "https://twitter.com/cedo_mex", target = "_blank", 
+                icon("twitter"), class = "social-icon"),
+              a(href = "https://www.instagram.com/cedointercultural/", target = "_blank", 
+                icon("instagram"), class = "social-icon"),
+              a(href = "https://www.youtube.com/channel/UCzefr0RNoKZa6fnwgG9QOlQ/videos", target = "_blank", 
+                icon("youtube"), class = "social-icon"),
+              a(href = "https://www.linkedin.com/company/cedo-centro-intercultural-del-desierto-y-del-oc-ano/", target = "_blank", 
+                icon("linkedin-in"), class = "social-icon")
+          )
+      )
   ),
   
   # Header with title
   div(class = "dashboard-header",
-      titlePanel("Evaluación de Pesquerías y Vulnerabilidad Climática")
+      titlePanel("Evaluaciones de las pesquerías, riesgo socioeconómico, biológico y recomendaciones de medidas de adaptación para comunidades costeras selectas en México")
   ),
   
   # Horizontal navigation bar
@@ -100,7 +130,7 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.mainTabs === 'capture'",
         div(class = "filter-section",
-          selectInput("capture_species", "Especie:", choices = NULL)
+          selectInput("capture_species", "Seleccionar Especie:", choices = NULL)
         )
       ),
       
@@ -143,16 +173,8 @@ ui <- fluidPage(
       
       # Download and methodology buttons at bottom of sidebar
       div(class = "sidebar-buttons",
-          downloadButton(
-            outputId = "download_report",
-            label = "Descargar Reporte",
-            class = "btn-download"
-          ),
-          downloadButton(
-            outputId = "download_data",
-            label = "Descargar Datos",
-            class = "btn-download"
-          ),
+         uiOutput("download_report"),
+          uiOutput("download_data"),
           actionButton("show_methodology", "Metodología", 
                      class = "btn-info",
                      icon = icon("info-circle"))
@@ -234,6 +256,11 @@ ui <- fluidPage(
         condition = "input.mainTabs === 'capture'",
         div(class = "tab-content",
             h3("Determinantes de la Captura", class = "section-title"),
+            
+            # Texto explicativo
+            uiOutput("capture_explanation"),
+            
+            # Tabla de datos
             withSpinner(DTOutput("capture_table"))
         )
       ),
@@ -265,7 +292,7 @@ ui <- fluidPage(
               )
             ),
             
-            withSpinner(plotlyOutput("vulnerability_scatter", height = "400px"))
+            withSpinner(plotlyOutput("vulnerability_scatter", height = "800px"))
         )
       ),
       
@@ -289,9 +316,13 @@ ui <- fluidPage(
         condition = "input.mainTabs === 'workshops'",
         div(class = "tab-content",
             h3("Talleres", class = "section-title"),
-            withSpinner(DTOutput("workshops_table")),
+            
+            # Panel con el nombre de la cooperativa y los bloques
+            withSpinner(uiOutput("workshops_panel")),
+            
+            # Muestra el número de filas filtradas
             div(class = "help-text", 
-                "Total de talleres realizados: ", 
+                "Total de registros filtrados: ", 
                 textOutput("workshops_count", inline = TRUE))
         )
       )

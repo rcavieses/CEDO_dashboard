@@ -1,10 +1,11 @@
 /* Variables de color actualizadas según Kit de Marca CEDO */
 :root {
-  --primary-blue: #0D1844;      /* Azul marino CEDO */
+  --primary-blue: #000033;      /* Azul marino CEDO */
   --secondary-blue: #1F5E86;    /* Azul atardecer CEDO */
-  --accent-blue: #00ABD5;       /* Azul cielo CEDO */
+  --accent-blue: #679EBC;       /* Azul cielo CEDO */
   --turquesa: #00BEBC;          /* Turquesa CEDO */
   --marina: #00FFFD;            /* Marina CEDO */
+  --gold: #CA972E;              /* Dorado CEDO */
   --light-blue: #E0E6ED;
   --bg-white: #ffffff;
   --bg-light: #f7fafc;
@@ -15,10 +16,73 @@
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* ===== BARRA DE CONTACTO ===== */
+.contact-top-bar {
+  background-color: var(--primary-blue);
+  color: white;
+  padding: 5px 0;
+  font-size: 14px;
+  width: 100%;
+  font-family: 'Raleway', sans-serif;
+  position: relative;
+}
+
+.contact-container {
+  display: flex;
+  justify-content: space-between; /* Separa a los extremos */
+  align-items: center;
+  width: 100%;
+  padding: 0 30px;
+}
+
+/* Contenedor para info de contacto */
+.contact-info {
+  display: flex;
+  align-items: center;
+}
+
+.contact-item {
+  color: white;
+  text-decoration: none;
+  margin-right: 20px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.contact-item:hover {
+  color: var(--gold);
+  text-decoration: none;
+}
+
+.social-icons {
+  display: flex;
+  justify-content: flex-end; /* Alinea íconos a la derecha */
+}
+
+.social-icon {
+  color: white;
+  margin: 0 8px;
+  font-size: 16px;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-icons .social-icon:last-child {
+  margin-right: 0;
+}
+
+.social-icon:hover {
+  transform: scale(1.2);
+  color: var(--gold);
+}
+
 /* ===== ESTILOS BASE ===== */
 body {
   font-family: 'Raleway', 'Univers', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-image: url('ondas.jpg');
+  background-image: url('ondas.png');
   background-position: center center;
   background-repeat: no-repeat;
   background-attachment: fixed;
@@ -39,7 +103,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 p {
-  font-family: 'Univers', sans-serif;
+  font-family: 'Raleway', sans-serif;
   text-shadow: 0 1px 1px rgba(255,255,255,0.8);
 }
 
@@ -97,7 +161,7 @@ h3.section-title {
 .navbar-default .navbar-nav > .active > a,
 .navbar-default .navbar-nav > .active > a:focus,
 .navbar-default .navbar-nav > .active > a:hover {
-  background-color: var(--accent-blue);
+  background-color: var(--gold);
   color: white;
 }
 
@@ -153,7 +217,7 @@ h3.section-title {
 .filter-section .form-group label {
   font-weight: 600;
   color: var(--text-primary);
-  font-family: 'Univers', sans-serif;
+  font-family: 'Raleway', sans-serif;
 }
 
 /* Selectores mejorados */
@@ -172,7 +236,7 @@ h3.section-title {
 
 .selectize-input:focus {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px rgba(0, 171, 213, 0.15);
+  box-shadow: 0 0 0 3px rgba(103, 158, 188, 0.15);
 }
 
 /* Botones del sidebar */
@@ -198,7 +262,7 @@ h3.section-title {
 }
 
 .btn-download:hover {
-  background-color: var(--secondary-blue);
+  background-color: var(--accent-blue);
   color: white;
 }
 
@@ -208,7 +272,7 @@ h3.section-title {
 }
 
 .btn-info:hover {
-  background-color: var(--secondary-blue);
+  background-color: var(--gold);
   color: white;
 }
 
@@ -221,7 +285,7 @@ h3.section-title {
   font-weight: normal;
   display: flex;
   align-items: center;
-  font-family: 'Univers', sans-serif;
+  font-family: 'Raleway', sans-serif;
 }
 
 .filter-section h5 {
@@ -272,7 +336,7 @@ h3.section-title {
 /* Contador de localidades */
 .locality-counter {
   font-family: 'Raleway', sans-serif;
-  background-color: rgba(13, 24, 68, 0.9) !important; /* Azul marino CEDO */
+  background-color: rgba(0, 0, 51, 0.9) !important; /* Azul marino CEDO */
   color: white !important;
   padding: 15px;
   border-radius: 8px;
@@ -312,7 +376,7 @@ h3.section-title {
 }
 
 .custom-datatable {
-  font-family: 'Univers', sans-serif;
+  font-family: 'Raleway', sans-serif;
 }
 
 .custom-datatable thead th {
@@ -366,7 +430,7 @@ h3.section-title {
   padding: 15px;
   background-color: rgba(255, 255, 255, 0.95);
   border-left: 4px solid var(--primary-blue);
-  font-family: 'Univers', sans-serif;
+  font-family: 'Raleway', sans-serif;
 }
 
 .btn-copy {
@@ -381,13 +445,13 @@ h3.section-title {
 }
 
 .btn-copy:hover {
-  background-color: var(--secondary-blue);
+  background-color: var(--accent-blue);
 }
 
 /* ===== FOOTER ===== */
 .footer-container {
   width: 100%;
-  background-color: rgba(13, 24, 68, 0.8); /* Azul marino CEDO */
+  background-color: rgba(0, 0, 51, 0.8); /* Azul marino CEDO */
   padding: 40px 0;
   margin-top: 40px;
   backdrop-filter: blur(5px);
@@ -436,7 +500,7 @@ h3.section-title {
   font-size: 14px;
   text-align: center;
   margin-top: 20px;
-  font-family: 'Univers', sans-serif;
+  font-family: 'Raleway', sans-serif;
 }
 
 /* ===== ANIMACIONES ===== */
@@ -484,6 +548,29 @@ h3.section-title {
   .logo-container-sidebar {
     flex-direction: column;
     align-items: center;
+  }
+  
+  /* Responsive para la barra de contacto */
+  .contact-container {
+    padding: 0 15px;
+  }
+  
+  .contact-info {
+    width: 50%;
+  }
+  
+  .contact-item {
+    font-size: 12px;
+    margin-right: 10px;
+  }
+  
+  .social-icons {
+    width: 50%;
+    justify-content: flex-end;
+  }
+  
+  .social-icon {
+    margin: 0 5px;
   }
 }
 
