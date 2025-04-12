@@ -1,0 +1,12 @@
+name: Evaluacion_de_riesgo
+title: Evaluacion_de_riesgo
+username: cedo
+account: cedo
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14495580
+bundleId: 10096206
+url: https://cedo.shinyapps.io/Evaluacion_de_riesgo/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

@@ -62,7 +62,7 @@ ui <- fluidPage(
     id = "mainTabs",
     tabPanel("Resumen ejecutivo", value = "summary"),
     tabPanel("Variables ambientales", value = "environment"),
-    tabPanel("Riesgo por especies", value = "risk"),
+    #tabPanel("Riesgo por especies", value = "risk"),
     tabPanel("Mapas de áreas potenciales de pesca", value = "fishing"),
     tabPanel("Acciones de adaptación", value = "adaptation"),
     tabPanel("Crecimiento y tamaño de la población", value = "population"),
@@ -95,12 +95,12 @@ ui <- fluidPage(
       ),
       
       # Species Risk Filters
-      conditionalPanel(
-        condition = "input.mainTabs === 'risk'",
-        div(class = "filter-section",
-          selectInput("risk_species", "Especie:", choices = NULL)
-        )
-      ),
+      #conditionalPanel(
+      #  condition = "input.mainTabs === 'risk'",
+      #  div(class = "filter-section",
+      #    selectInput("risk_species", "Especie:", choices = NULL)
+      #  )
+      #),
       
       # Fishing Areas Filters
       conditionalPanel(
@@ -205,16 +205,16 @@ ui <- fluidPage(
       ),
       
       # Species Risk
-      conditionalPanel(
-        condition = "input.mainTabs === 'risk'",
-        div(class = "tab-content",
-            h3("Evaluación de Riesgo por Especies", class = "section-title"),
-            withSpinner(uiOutput("risk_image")),
-            div(class = "help-text", 
-                "Total de especies analizadas: ", 
-                textOutput("risk_species_count", inline = TRUE))
-        )
-      ),
+      #conditionalPanel(
+      #  condition = "input.mainTabs === 'risk'",
+      #  div(class = "tab-content",
+      #      h3("Evaluación de Riesgo por Especies", class = "section-title"),
+      #      withSpinner(uiOutput("risk_image")),
+      #      div(class = "help-text", 
+      #          "Total de especies analizadas: ", 
+      #          textOutput("risk_species_count", inline = TRUE))
+      #  )
+      #),
       
       # Fishing Areas
       conditionalPanel(
