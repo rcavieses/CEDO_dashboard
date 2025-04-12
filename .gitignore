@@ -142,7 +142,8 @@ venv.bak/
 
 # Rope project settings
 .ropeproject
-
+rsconnect/
+*.dcf
 # mkdocs documentation
 /site
 *.jpg
