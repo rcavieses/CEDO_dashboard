@@ -110,11 +110,12 @@ ui <- fluidPage(
         )
       ),
       
+      
       # Adaptation Actions Filters
       conditionalPanel(
         condition = "input.mainTabs === 'adaptation'",
         div(class = "filter-section",
-          selectInput("adaptation_cooperative", "Cooperativa:", choices = NULL)
+          selectInput("adaptation_plazo", "Plazo de implementación:", choices = NULL)
         )
       ),
       

@@ -354,7 +354,7 @@ function(input, output, session) {
     
     # Convert to plotly
     ggplotly(p) %>% 
-      layout(margin = list(l = 50, r = 50, b = 80, t = 75))
+      layout(margin = list(l = 55, r = 55, b = 78, t = 73))
   })
   
   # 3. Species Risk -----------------------------------------------------------
@@ -493,30 +493,30 @@ function(input, output, session) {
     safe_read_csv(paths$file_path)
   })
   
-  # Get unique cooperatives for selector
-  adaptation_cooperatives <- reactive({
+  # Get unique implementation periods
+  plazo_adaptation <- reactive({
     data <- adaptation_data()
-    if (!is.null(data) && "cooperativa" %in% colnames(data)) {
-      return(sort(unique(data$cooperativa)))
+    if (!is.null(data) && "Plazo_implementacion" %in% colnames(data)) {
+      return(sort(unique(data$Plazo_implementacion)))
     }
     return(character(0))
   })
   
-  # Update cooperative selector for adaptation actions
+  # Update implementation period selector
   observe({
-    cooperatives <- adaptation_cooperatives()
-    updateSelectInput(session, "adaptation_cooperative", 
-                      choices = c("All" = "all", cooperatives),
+    plazos <- plazo_adaptation()
+    updateSelectInput(session, "adaptation_plazo", 
+                      choices = c("All" = "all", plazos),
                       selected = "all")
   })
   
-  # Filter adaptation data based on selected cooperative
+  # Filter adaptation data based on selected implementation period
   filtered_adaptation_data <- reactive({
     data <- adaptation_data()
     if (is.null(data)) return(NULL)
     
-    if (input$adaptation_cooperative != "all") {
-      data <- data %>% filter(cooperativa == input$adaptation_cooperative)
+    if (input$adaptation_plazo != "all") {
+      data <- data %>% filter(Plazo_implementacion == input$adaptation_plazo)
     }
     
     return(data)
@@ -1014,10 +1014,10 @@ function(input, output, session) {
     
     # Variable names mapping for popup
     var_names <- c(
-      "Vulnerabilidad" = "Vulnerability",
-      "Adaptabilidad" = "Adaptability",
-      "Exposicion" = "Exposure",
-      "Sensibilidad" = "Sensitivity"
+      "Vulnerabilidad" = "Vulnerabilidad",
+      "Adaptabilidad" = "Adaptabilidad",
+      "Exposicion" = "Exposicion",
+      "Sensibilidad" = "Sensibilidad"
     )
     
     # Create the map
@@ -1028,10 +1028,10 @@ function(input, output, session) {
         lat = ~deci_lat,
         radius = ~radius_scale(POBTOT),
         popup = ~paste(
-          "<strong>Entity:</strong>", NOM_ENT, "<br>",
-          "<strong>Municipality:</strong>", NOM_MUN, "<br>",
-          "<strong>Locality:</strong>", NOM_LOC, "<br>",
-          "<strong>Population:</strong>", format(POBTOT, big.mark = ","), "<br>",
+          "<strong>Estado:</strong>", NOM_ENT, "<br>",
+          "<strong>Municipalidad:</strong>", NOM_MUN, "<br>",
+          "<strong>Localidad:</strong>", NOM_LOC, "<br>",
+          "<strong>Población:</strong>", format(POBTOT, big.mark = ","), "<br>",
           "<strong>", var_names[input$vuln_variable], ":</strong> ", 
           round(get(input$vuln_variable), 3)
         ),
@@ -1064,23 +1064,23 @@ function(input, output, session) {
                     size = POBTOT,
                     color = Exposicion,
                     text = paste0(
-                      "Locality: ", NOM_LOC, "<br>",
-                      "Population: ", format(POBTOT, big.mark = ","), "<br>",
-                      "Adaptability: ", round(Adaptabilidad, 3), "<br>",
-                      "Vulnerability: ", round(Vulnerabilidad, 3), "<br>",
-                      "Sensitivity: ", round(Sensibilidad, 3), "<br>",
-                      "Exposure: ", round(Exposicion, 3)
+                      "Localidad: ", NOM_LOC, "<br>",
+                      "Población: ", format(POBTOT, big.mark = ","), "<br>",
+                      "Adaptabilidad: ", round(Adaptabilidad, 3), "<br>",
+                      "Vulnerabilidad: ", round(Vulnerabilidad, 3), "<br>",
+                      "Sensibilidad: ", round(Sensibilidad, 3), "<br>",
+                      "Exposición: ", round(Exposicion, 3)
                     ))) +
       geom_point(alpha = 0.7) +
-      scale_size_continuous(name = "Total Population", 
+      scale_size_continuous(name = "Población total", 
                            range = c(2, 12),
                            breaks = c(5000, 25000, 100000, 200000)) +
-      scale_color_viridis_c(name = "Exposure", 
+      scale_color_viridis_c(name = "Exposición", 
                            option = "magma", 
                            direction = -1) +
       labs(
         
-        subtitle = paste("Scenario:", input$vuln_scenario),
+        subtitle = paste("Escenario:", input$vuln_scenario),
         x = "Adaptabilidad",
         y = "Sensibilidad"
       ) +
@@ -1440,8 +1440,8 @@ function(input, output, session) {
   })
   
   # Count cooperatives for adaptation actions
-  output$adaptation_cooperatives_count <- renderText({
-    cooperatives <- adaptation_cooperatives()
+  output$adaptation_implementation_count <- renderText({
+    cooperatives <- adaptation_implementation()
     length(cooperatives)
   })
   
