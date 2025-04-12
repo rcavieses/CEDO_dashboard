@@ -359,55 +359,55 @@ function(input, output, session) {
   
   # 3. Species Risk -----------------------------------------------------------
   
-  # List available species with risk images
-  risk_species <- reactive({
-    paths <- get_file_paths("data/riesgo_sp")
+  # # List available species with risk images
+  # risk_species <- reactive({
+  #   paths <- get_file_paths("data/riesgo_sp")
     
-    if(paths$using_www) {
-      # Si estamos usando estructura www
-      risk_files <- list.files(path = paths$file_path, pattern = "\\.png$", full.names = FALSE)
-      species <- tools::file_path_sans_ext(risk_files)
-    } else {
-      # Estructura original
-      risk_files <- list_files_with_ext("data/riesgo_sp", "png")
-      species <- sapply(risk_files, extract_filename)
-    }
+  #   if(paths$using_www) {
+  #     # Si estamos usando estructura www
+  #     risk_files <- list.files(path = paths$file_path, pattern = "\\.png$", full.names = FALSE)
+  #     species <- tools::file_path_sans_ext(risk_files)
+  #   } else {
+  #     # Estructura original
+  #     risk_files <- list_files_with_ext("data/riesgo_sp", "png")
+  #     species <- sapply(risk_files, extract_filename)
+  #   }
     
-    return(species)
-  })
+  #   return(species)
+  # })
   
-  # Update species selector for risk images
-  observe({
-    species <- risk_species()
-    updateSelectInput(session, "risk_species", 
-                      choices = species,
-                      selected = if(length(species) > 0) species[1] else NULL,
-                      label = "Seleccionar Especie:")
-  })
+  # # Update species selector for risk images
+  # observe({
+  #   species <- risk_species()
+  #   updateSelectInput(session, "risk_species", 
+  #                     choices = species,
+  #                     selected = if(length(species) > 0) species[1] else NULL,
+  #                     label = "Seleccionar Especie:")
+  # })
   
-  # Render species risk image
-  output$risk_image <- renderUI({
-    req(input$risk_species)
+  # # Render species risk image
+  # output$risk_image <- renderUI({
+  #   req(input$risk_species)
     
-    paths <- get_file_paths("data/riesgo_sp", paste0(input$risk_species, ".png"))
+  #   paths <- get_file_paths("data/riesgo_sp", paste0(input$risk_species, ".png"))
     
-    if (!file.exists(paths$file_path)) {
-      return(HTML("<div class='alert alert-warning'>Imagen no encontrada para la especie seleccionada.</div>"))
-    }
+  #   if (!file.exists(paths$file_path)) {
+  #     return(HTML("<div class='alert alert-warning'>Imagen no encontrada para la especie seleccionada.</div>"))
+  #   }
     
-    # Si estamos usando estructura www, la URL es relativa a www
-    if(paths$using_www) {
-      img_src <- paths$url_path
-    } else {
-      img_src <- paths$file_path
-    }
+  #   # Si estamos usando estructura www, la URL es relativa a www
+  #   if(paths$using_www) {
+  #     img_src <- paths$url_path
+  #   } else {
+  #     img_src <- paths$file_path
+  #   }
     
-    tags$div(
-      style = "text-align: center;",
-      tags$h4(paste("Evaluación de riesgo para", gsub("_", " ", input$risk_species))),
-      tags$img(src = img_src, width = "80%", class = "img-responsive")
-    )
-  })
+  #   tags$div(
+  #     style = "text-align: center;",
+  #     tags$h4(paste("Evaluación de riesgo para", gsub("_", " ", input$risk_species))),
+  #     tags$img(src = img_src, width = "80%", class = "img-responsive")
+  #   )
+  # })
   
   # 4. Potential Fishing Areas Maps -------------------------------------------
   
