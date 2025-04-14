@@ -106,12 +106,12 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.mainTabs === 'fishing'",
         div(class = "filter-section",
-          selectInput("fishing_locality", "Localidad:", choices = NULL)
+          selectInput("fishing_locality", "Cooperativa:", choices = NULL)
         )
       ),
       
       
-      # Adaptation Actions Filters
+      # Adaptation Actions Filters ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'adaptation'",
         div(class = "filter-section",
@@ -119,7 +119,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Population Filters
+      # Population Filters ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'population'",
         div(class = "filter-section",
@@ -127,7 +127,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Capture Determinants Filters
+      # Capture Determinants Filters ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'capture'",
         div(class = "filter-section",
@@ -135,7 +135,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Vulnerability Filters
+      # Vulnerability Filters ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'vulnerability'",
         div(class = "filter-section",
@@ -186,7 +186,7 @@ ui <- fluidPage(
     mainPanel(
       width = 9,
       
-      # Executive Summary
+      # Executive Summary ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'summary'",
         div(class = "tab-content",
@@ -195,7 +195,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Environmental Variables
+      # Environmental Variables ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'environment'",
         div(class = "tab-content",
@@ -205,7 +205,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Species Risk
+      # Species Risk ----------------------------------------------------------
       #conditionalPanel(
       #  condition = "input.mainTabs === 'risk'",
       #  div(class = "tab-content",
@@ -217,19 +217,19 @@ ui <- fluidPage(
       #  )
       #),
       
-      # Fishing Areas
+      # Fishing Areas ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'fishing'",
         div(class = "tab-content",
             h3("Mapas de Áreas Potenciales de Pesca", class = "section-title"),
             withSpinner(uiOutput("fishing_map")),
             div(class = "help-text", 
-                "Total de localidades: ", 
+                "Total de cooperativas: ", 
                 textOutput("fishing_localities_count", inline = TRUE))
         )
       ),
       
-      # Adaptation Actions
+      # Adaptation Actions ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'adaptation'",
         div(class = "tab-content",
@@ -241,7 +241,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Population Growth and Size
+      # Population Growth and Size ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'population'",
         div(class = "tab-content",
@@ -250,9 +250,7 @@ ui <- fluidPage(
         )
       ),
 
-
-      
-      # Capture Determinants
+      # Capture Determinants ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'capture'",
         div(class = "tab-content",
@@ -266,7 +264,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Regional Vulnerability
+      # Regional Vulnerability ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'vulnerability'",
         div(class = "tab-content",

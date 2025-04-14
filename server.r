@@ -446,11 +446,11 @@ function(input, output, session) {
       updateSelectInput(session, "fishing_locality", 
                       choices = localities,
                       selected = localities[1],
-                      label = "Seleccionar Localidad:")
+                      label = "Seleccionar Cooperativa:")
     } else {
       updateSelectInput(session, "fishing_locality", 
                       choices = character(0),
-                      label = "Seleccionar Localidad: (no se encontraron mapas)")
+                      label = "Seleccionar Cooperativa: (no se encontraron mapas)")
     }
   })
   
@@ -461,7 +461,7 @@ function(input, output, session) {
     paths <- get_file_paths("data/mapas_areas_pesca", paste0(input$fishing_locality, ".jpg"))
     
     if (!file.exists(paths$file_path)) {
-      return(HTML("<div class='alert alert-warning'>Mapa no encontrado para la localidad seleccionada.</div>"))
+      return(HTML("<div class='alert alert-warning'>Mapa no encontrado para la cooperativa seleccionada.</div>"))
     }
     
     # Si estamos usando estructura www, la URL es relativa a www
@@ -1293,8 +1293,6 @@ function(input, output, session) {
       )
     )
   })
-
-
   # 10. Workshops -------------------------------------------------------------
   # 1. Carga de datos
   workshops_data <- reactive({
