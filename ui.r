@@ -28,8 +28,8 @@ ui <- fluidPage(
       div(class = "contact-container",
           # Lado izquierdo - Información de contacto
           div(class = "contact-info",
-              a(href = "mailto:info@cedo.org", 
-                icon("envelope"), " info@cedo.org", 
+              a(href = "hemnalini@cedo.org", 
+                icon("envelope"), 
                 class = "contact-item"),
               a(href = "tel:+1-52-638-382-0113", 
                 icon("phone"), " +1 52 638-382-0113 y 0115", 
@@ -62,14 +62,15 @@ ui <- fluidPage(
     id = "mainTabs",
     tabPanel("Resumen ejecutivo", value = "summary"),
     tabPanel("Variables ambientales", value = "environment"),
+    tabPanel("Mapas de cambios en distribución", value = "distribution"),
+    tabPanel("Crecimiento y tamaño de la población", value = "population"),
+    tabPanel("Mapa Vulnerabilidad regional", value = "vulnerability"),
+    tabPanel("Determinantes de captura", value = "capture"),
     #tabPanel("Riesgo por especies", value = "risk"),
     tabPanel("Mapas de áreas potenciales de pesca", value = "fishing"),
-    tabPanel("Acciones de adaptación", value = "adaptation"),
-    tabPanel("Crecimiento y tamaño de la población", value = "population"),
-    tabPanel("Determinantes de captura", value = "capture"),
-    tabPanel("Mapa Vulnerabilidad regional", value = "vulnerability"),
-    tabPanel("Mapas de cambios en distribución", value = "distribution"),
-    tabPanel("Talleres", value = "workshops")
+    tabPanel("Acciones de adaptación para SCPP", value = "workshops"),
+    tabPanel("Acciones generales de adaptación", value = "adaptation")
+    
   ),
   
   # Main content area with sidebar layout
@@ -115,7 +116,30 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.mainTabs === 'adaptation'",
         div(class = "filter-section",
-          selectInput("adaptation_plazo", "Plazo de implementación:", choices = NULL)
+          # 1. Filtro de plazo de implementación
+          selectInput("adaptation_timeframe", "Plazo de implementación:", choices = NULL),
+          
+          # 2. Radio buttons para tipo de estrategia - se cargarán dinámicamente
+          h4("Tipo de estrategia:", style = "margin-top: 20px;"),
+          
+          # Contenedor con estilo para los radio buttons
+          div(
+            style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 4px solid #1a365d;",
+            # Solo definimos el ID del input, las opciones se cargarán dinámicamente
+            radioButtons(
+              "adaptation_type", 
+              label = NULL, 
+              choices = c("Todas" = "all"),  # Valor inicial, se actualizará
+              selected = "all"
+            )
+          ),
+          
+          # 3. Opción para mostrar todos los registros
+          checkboxInput(
+            "show_all_records", 
+            "Mostrar todos los registros", 
+            value = TRUE
+          )
         )
       ),
       
@@ -230,16 +254,14 @@ ui <- fluidPage(
       ),
       
       # Adaptation Actions ----------------------------------------------------------
-      conditionalPanel(
-        condition = "input.mainTabs === 'adaptation'",
-        div(class = "tab-content",
-            h3("Acciones de Adaptación", class = "section-title"),
-            withSpinner(DTOutput("adaptation_table")),
-            div(class = "help-text", 
-                "Total de cooperativas: ", 
-                textOutput("adaptation_cooperatives_count", inline = TRUE))
-        )
-      ),
+     conditionalPanel(
+      condition = "input.mainTabs === 'adaptation'",
+      div(class = "tab-content",
+          h3("Acciones de Adaptación", class = "section-title"),
+          withSpinner(DTOutput("adaptation_table")),
+          uiOutput("adaptation_help_text")
+      )
+    ),
       
       # Population Growth and Size ----------------------------------------------------------
       conditionalPanel(

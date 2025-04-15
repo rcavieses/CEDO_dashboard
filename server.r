@@ -120,7 +120,7 @@ function(input, output, session) {
   
   # Load executive summary text directly from the summary.txt file
   exec_summary_text <- reactive({
-    paths <- get_file_paths("data/resumen/summary.txt")
+    paths <- get_file_paths("data/resumen/summary.md")
     safe_read_text(paths$file_path)
   })
   
@@ -486,63 +486,187 @@ function(input, output, session) {
   })
   
   # 5. Adaptation Actions -----------------------------------------------------
-  
   # Load adaptation actions data
   adaptation_data <- reactive({
     paths <- get_file_paths("data/acc_adap/adaptacion.csv")
-    safe_read_csv(paths$file_path)
-  })
-  
-  # Get unique implementation periods
-  plazo_adaptation <- reactive({
-    data <- adaptation_data()
-    if (!is.null(data) && "Plazo_implementacion" %in% colnames(data)) {
-      return(sort(unique(data$Plazo_implementacion)))
-    }
-    return(character(0))
-  })
-  
-  # Update implementation period selector
-  observe({
-    plazos <- plazo_adaptation()
-    updateSelectInput(session, "adaptation_plazo", 
-                      choices = c("All" = "all", plazos),
-                      selected = "all")
-  })
-  
-  # Filter adaptation data based on selected implementation period
-  filtered_adaptation_data <- reactive({
-    data <- adaptation_data()
-    if (is.null(data)) return(NULL)
+    data <- safe_read_csv(paths$file_path, show_col_types = FALSE)
     
-    if (input$adaptation_plazo != "all") {
-      data <- data %>% filter(Plazo_implementacion == input$adaptation_plazo)
+    # Verificar que los datos se cargaron correctamente
+    if (is.null(data) || ncol(data) == 0) {
+      warning("No se pudo cargar el archivo CSV o está vacío")
+      return(NULL)
     }
     
     return(data)
   })
-  
+
+  # Get unique strategy types for radio buttons
+  adaptation_types <- reactive({
+    data <- adaptation_data()
+    if (!is.null(data) && "Tipo de estrategia" %in% colnames(data)) {
+      return(sort(unique(data$`Tipo de estrategia`)))
+    }
+    return(character(0))
+  })
+
+  # Get unique timeframes for selector
+  adaptation_timeframes <- reactive({
+    data <- adaptation_data()
+    if (!is.null(data) && "Plazo de implementación" %in% colnames(data)) {
+      return(sort(unique(data$`Plazo de implementación`)))
+    }
+    return(character(0))
+  })
+
+  # Update strategy types radio buttons
+  observe({
+    types <- adaptation_types()
+    if(length(types) > 0) {
+      choices <- c("Todas" = "all", setNames(types, types))
+      updateRadioButtons(session, "adaptation_type", choices = choices, selected = "all")
+    }
+  })
+
+  # Update timeframe selector
+  observe({
+    timeframes <- adaptation_timeframes()
+    updateSelectInput(session, "adaptation_timeframe", 
+                    choices = c("Todos" = "all", timeframes),
+                    selected = "all")
+  })
+
+  # Filter adaptation data based on selected filters
+  filtered_adaptation_data <- reactive({
+    data <- adaptation_data()
+    if (is.null(data)) return(NULL)
+    
+    # Filtrar por tipo de estrategia
+    if (input$adaptation_type != "all" && "Tipo de estrategia" %in% colnames(data)) {
+      data <- data %>% filter(`Tipo de estrategia` == input$adaptation_type)
+    }
+    
+    # Filtrar por plazo de implementación
+    if (input$adaptation_timeframe != "all" && "Plazo de implementación" %in% colnames(data)) {
+      data <- data %>% filter(`Plazo de implementación` == input$adaptation_timeframe)
+    }
+    
+    return(data)
+  })
+
   # Render adaptation actions table
   output$adaptation_table <- renderDT({
     data <- filtered_adaptation_data()
     
     if (is.null(data) || nrow(data) == 0) {
-      return(data.frame(Message = "No adaptation actions data available"))
+      return(data.frame(Mensaje = "No hay datos de adaptación disponibles para los filtros seleccionados"))
     }
     
-    datatable(
-      data,
+    # Ordenar por tipo de estrategia
+    if ("Tipo de estrategia" %in% colnames(data)) {
+      data <- data %>% arrange(`Tipo de estrategia`)
+    }
+    
+    # Limitar registros si no se marca "mostrar todos"
+    if (!input$show_all_records && nrow(data) > 10) {
+      data <- head(data, 10)
+    }
+    
+    # Seleccionar columnas excluyendo "Tipo de estrategia" (ya filtrado)
+    if ("Tipo de estrategia" %in% colnames(data)) {
+      data_display <- data %>% 
+        select(-`Tipo de estrategia`)
+    } else {
+      data_display <- data
+    }
+    
+    # Crear tabla con formato similar a la imagen
+    dt <- datatable(
+      data_display,
       options = list(
-        pageLength = 10,
-        autoWidth = TRUE,
-        scrollX = TRUE,
-        dom = 'Bfrtip',
-        buttons = c('copy', 'csv', 'excel')
+        pageLength = if(input$show_all_records) -1 else 10, # -1 muestra todos los registros
+        autoWidth = FALSE,            # No ajustar anchos automáticamente
+        scrollX = TRUE,               # Scroll horizontal si es necesario
+        dom = 'ft',                   # Solo tabla y filtro de búsqueda
+        ordering = FALSE,             # Desactivar ordenamiento
+        columnDefs = list(
+          # Ajustar anchos específicos para cada columna
+          list(width = '40%', targets = 0),  # Estrategia (primera columna ahora)
+          list(width = '15%', targets = 1),  # Plazo de implementación
+          list(width = '15%', targets = 2),  # Vinculacion al PLECCA
+          list(width = '30%', targets = 3)   # Actores
+        )
       ),
-      rownames = FALSE,
-      filter = 'top',
-      class = 'cell-border stripe'
+      rownames = FALSE,                # No mostrar números de fila
+      filter = 'top',                  # Buscador en la parte superior
+      class = 'cell-border stripe',    # Clases CSS para estilo
+      caption = htmltools::tags$caption(
+        style = 'caption-side: top; text-align: left; font-weight: bold; font-size: 1.2em; margin-bottom: 10px;',
+        'Acciones de Adaptación'
+      )
     )
+    
+    # Aplicar estilos a las celdas
+    dt <- dt %>% formatStyle(
+      columns = 0:(ncol(data_display)-1),  # Todas las columnas
+      border = '1px solid #ddd',
+      borderCollapse = 'collapse'
+    )
+    
+    # Aplicar estilo específico a los plazos si existe la columna
+    if ("Plazo de implementación" %in% colnames(data_display)) {
+      dt <- dt %>% formatStyle(
+        'Plazo de implementación',
+        backgroundColor = styleEqual(
+          c("Corto", "Mediano", "Largo"),
+          c('#f0f8ff', '#f0fff0', '#fff0f0')
+        ),
+        fontWeight = 'bold'
+      )
+    }
+    
+    dt
+  })
+
+  # Update help text
+  output$adaptation_help_text <- renderUI({
+    data <- filtered_adaptation_data()
+    count <- if(is.null(data)) 0 else nrow(data)
+    
+    # Determinar el tipo seleccionado para mostrar
+    selected_type <- input$adaptation_type
+    if (selected_type == "all") {
+      tipo_texto <- "Todas"
+    } else {
+      tipo_texto <- selected_type
+    }
+    
+    # Determinar el plazo seleccionado para mostrar
+    selected_plazo <- input$adaptation_timeframe
+    if (selected_plazo == "all") {
+      plazo_texto <- "Todos"
+    } else {
+      plazo_texto <- selected_plazo
+    }
+    
+    div(class = "help-text", 
+        "Mostrando ", 
+        if(input$show_all_records || count <= 10) {
+          paste0(count, " estrategias")
+        } else {
+          "primeras 10 estrategias (marque 'Mostrar todos los registros' para ver el total)"
+        },
+        br(),
+        "Filtros aplicados: ",
+        "Tipo de estrategia: ", strong(tipo_texto),
+        " | Plazo: ", strong(plazo_texto)
+    )
+  })
+
+  # Count for total strategies
+  output$adaptation_cooperatives_count <- renderText({
+    data <- filtered_adaptation_data()
+    if (is.null(data)) return("0")
+    nrow(data)
   })
   
   # 6. Population Growth and Size ---------------------------------------------
@@ -913,24 +1037,25 @@ function(input, output, session) {
   })
     
   # 8. Regional Vulnerability -------------------------------------------------
-  
+
   # Load vulnerability data from SQLite database
   vulnerability_data <- reactive({
     paths <- get_file_paths("data/vuln_reg/vuln_reg.db")
     query <- "
       SELECT L.CVE_LOC, L.NOM_LOC, M.NOM_MUN, E.NOM_ENT, 
-           L.deci_lat, L.deci_lon, L.POBTOT,
-           R.id_scenario, S.scenario_name,
-           R.Vulnerabilidad, R.Adaptabilidad, R.Exposicion, R.Sensibilidad
+          L.deci_lat, L.deci_lon, L.POBTOT,
+          R.id_scenario, S.scenario_name,
+          R.Vulnerabilidad, R.Adaptabilidad, R.Exposicion, R.Sensibilidad
       FROM RESULTS R
       JOIN LOCALIDAD L ON R.CVE_LOC = L.CVE_LOC
       JOIN MUNICIPIO M ON L.CVE_MUN = M.CVE_MUN
       JOIN ENTIDAD E ON M.CVE_ENT = E.CVE_ENT
       JOIN SCENARIO S ON R.id_scenario = S.id_scenario
+      WHERE E.NOM_ENT IN ('Baja California Sur', 'Baja California', 'Quintana Roo', 'Yucatán')
     "
     load_db_data(paths$file_path, query)
   })
-  
+
   # Get unique entities for selector
   vulnerability_entities <- reactive({
     data <- vulnerability_data()
@@ -996,7 +1121,7 @@ function(input, output, session) {
     if (is.null(data) || nrow(data) == 0) {
       return(leaflet() %>% 
                addTiles() %>% 
-               setView(lng = -102.5, lat = 23.6, zoom = 5) %>%
+               setView(lng = -102.5, lat = 23.0, zoom = 6) %>%
                addControl(
                  html = "<div class='alert alert-warning'>No vulnerability data available for selected filters</div>",
                  position = "topright"
@@ -1294,29 +1419,27 @@ function(input, output, session) {
     )
   })
   # 10. Workshops -------------------------------------------------------------
-  # 1. Carga de datos
+  # Load workshop data
   workshops_data <- reactive({
-    # Ajusta la ruta si la carpeta o el nombre del archivo difiere
     paths <- get_file_paths("data/talleres", "talleres.csv") 
     df <- safe_read_csv(paths$file_path)
     df
   })
 
-  # 2. Obtiene lista de cooperativas (usando la columna 'cooperativa')
+  # Get unique cooperatives list
   workshops_cooperatives <- reactive({
     data <- workshops_data()
     if (is.null(data)) return(character(0))
     
-    # Ajustado a la columna 'cooperativa' (en minúsculas según la estructura del CSV)
-    if (!"cooperativa" %in% colnames(data)) {
-      warning("No se encontró la columna 'cooperativa'. Ajusta el nombre para que coincida con el CSV.")
+    if (!"Cooperativa" %in% colnames(data)) {
+      warning("Column 'Cooperativa' not found. Check CSV structure.")
       return(character(0))
     }
     
-    sort(unique(data$cooperativa))
+    sort(unique(data[["Cooperativa"]]))
   })
 
-  # 3. Observador: actualiza el selector de cooperativas (selecciona la primera al iniciar)
+  # Update cooperative selector
   observe({
     cooperatives <- workshops_cooperatives()
     updateSelectInput(
@@ -1327,21 +1450,21 @@ function(input, output, session) {
     )
   })
 
-  # 4. Filtra los datos según la cooperativa escogida
+  # Filter data by selected cooperative
   filtered_workshops_data <- reactive({
     data <- workshops_data()
     if (is.null(data)) return(NULL)
     
     req(input$workshops_cooperative)
-    data[data$cooperativa == input$workshops_cooperative, , drop = FALSE]
+    data[data[["Cooperativa"]] == input$workshops_cooperative, , drop = FALSE]
   })
 
-  # 5. Definimos la agrupación de columnas basada en las columnas disponibles
-  info_general_cols <- c("Tipo de acción", "Origen de la acción")
-  acciones_cols     <- c("Acción recomendada", "Plazo temporal")
+  # Define column groupings
+  info_general_cols <- c("Grupo de acción", "Tipo de acción", "Origen de la acción")
+  acciones_cols     <- c("Acción recomendada", "Plazo")
   impacto_cols      <- c("Vinculación al PLECCA", "Impacto esperado")
 
-  # 6. Renderizamos el panel principal con el nombre de la cooperativa + secciones
+  # Render main workshop panel
   output$workshops_panel <- renderUI({
     data <- filtered_workshops_data()
     
@@ -1349,51 +1472,114 @@ function(input, output, session) {
       return(HTML("<div class='alert alert-warning'>No hay datos para la cooperativa seleccionada.</div>"))
     }
     
-    # Título con el nombre de la cooperativa
+    # Cooperative title
     coop_title <- h2(paste("Cooperativa:", input$workshops_cooperative))
     
-    # Supongamos que solo mostramos la primera fila (si hubiera varias,
-    # podríamos iterar sobre cada fila o pedirle al usuario seleccionar un registro).
-    row_data <- data[1, , drop = FALSE]
-    
-    # Función auxiliar para generar un bloque con un título y columnas
-    create_block <- function(block_title, col_names, color_bar = "#2874A6") {
-      # Filtramos solo las columnas que existan en row_data y que estén en col_names
-      valid_cols <- intersect(col_names, names(row_data))
-      if (length(valid_cols) == 0) return(NULL)
-      
-      div(
-        style = "background-color: #FAFAFA; padding: 15px; margin-bottom: 20px; border-radius: 6px;",
-        h3(block_title),
-        fluidRow(
-          lapply(valid_cols, function(col) {
-            val <- row_data[[col]]
-            column(
-              width = 4,  # Ajusta el ancho de cada columna
-              div(
-                style = paste0("border-left: 4px solid ", color_bar, 
-                              "; padding-left: 10px; margin-bottom: 10px;"),
-                h4(col, style = "margin-top: 0;"),
-                div(style = "font-weight: bold;", as.character(val))
-              )
-            )
-          })
-        )
-      )
+    # Get unique action groups
+    grupos_accion <- NULL
+    if ("Grupo de acción" %in% colnames(data)) {
+      grupos_accion <- unique(data[["Grupo de acción"]])
+    } else {
+      return(HTML("<div class='alert alert-warning'>Column 'Grupo de acción' not found in data.</div>"))
     }
     
-    # Creamos los tres bloques adaptados a las nuevas columnas
-    block_general <- create_block("Información general", info_general_cols, color_bar = "#2874A6")
-    block_acciones <- create_block("Acciones recomendadas", acciones_cols, color_bar = "#27AE60")
-    block_impacto <- create_block("Impacto y vinculación", impacto_cols, color_bar = "#D35400")
+    # Create a block for each action group
+    bloques_grupos <- lapply(grupos_accion, function(grupo) {
+      # Filter rows for this group
+      filas_grupo <- data[data[["Grupo de acción"]] == grupo, , drop = FALSE]
+      
+      # Create container div for this group
+      div(
+        style = "background-color: #f5f7fa; border-radius: 8px; padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);",
+        h3(grupo, style = "color: var(--primary-blue); border-bottom: 2px solid var(--border-color); padding-bottom: 10px;"),
+        
+        # For each row in this group, create an action panel
+        lapply(1:nrow(filas_grupo), function(i) {
+          row_data <- filas_grupo[i, , drop = FALSE]
+          
+          div(
+            style = "background-color: white; border-radius: 6px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);",
+            
+            # General information section
+            div(
+              style = "margin-bottom: 15px;",
+              h4("Información general", style = "color: #2874A6; margin-top: 0; font-size: 16px;"),
+              fluidRow(
+                lapply(info_general_cols, function(col) {
+                  if (col != "Grupo de acción" && col %in% colnames(row_data)) {
+                    column(
+                      width = 6,
+                      div(
+                        style = "border-left: 4px solid #2874A6; padding-left: 10px; margin-bottom: 10px;",
+                        h5(col, style = "margin-top: 0; margin-bottom: 5px; font-size: 14px;"),
+                        div(style = "font-weight: bold;", as.character(row_data[[col]]))
+                      )
+                    )
+                  }
+                })
+              )
+            ),
+            
+            # Recommended action section
+            div(
+              style = "margin-bottom: 15px;",
+              h4("Acción recomendada", style = "color: #27AE60; margin-top: 0; font-size: 16px;"),
+              fluidRow(
+                column(
+                  width = 8,
+                  div(
+                    style = "border-left: 4px solid #27AE60; padding-left: 10px; margin-bottom: 10px;",
+                    h5("Acción", style = "margin-top: 0; margin-bottom: 5px; font-size: 14px;"),
+                    div(style = "font-weight: bold;", if ("Acción recomendada" %in% colnames(row_data)) as.character(row_data[["Acción recomendada"]]) else "N/A")
+                  )
+                ),
+                column(
+                  width = 4,
+                  div(
+                    style = "border-left: 4px solid #27AE60; padding-left: 10px; margin-bottom: 10px;",
+                    h5("Plazo", style = "margin-top: 0; margin-bottom: 5px; font-size: 14px;"),
+                    div(style = "font-weight: bold;", if ("Plazo" %in% colnames(row_data)) as.character(row_data[["Plazo"]]) else "N/A")
+                  )
+                )
+              )
+            ),
+            
+            # Impact and linkage section
+            div(
+              style = "margin-bottom: 10px;",
+              h4("Impacto y vinculación", style = "color: #D35400; margin-top: 0; font-size: 16px;"),
+              fluidRow(
+                lapply(impacto_cols, function(col) {
+                  if (col %in% colnames(row_data)) {
+                    column(
+                      width = 6,
+                      div(
+                        style = "border-left: 4px solid #D35400; padding-left: 10px; margin-bottom: 10px;",
+                        h5(col, style = "margin-top: 0; margin-bottom: 5px; font-size: 14px;"),
+                        div(style = "font-weight: bold;", as.character(row_data[[col]]))
+                      )
+                    )
+                  }
+                })
+              )
+            )
+          )
+        })
+      )
+    })
     
-    # Construimos la salida final
+    # Build final output
     tagList(
       coop_title,
-      block_general,
-      block_acciones,
-      block_impacto
+      bloques_grupos
     )
+  })
+  
+  # Count workshops
+  output$workshops_count <- renderText({
+    data <- filtered_workshops_data()
+    if (is.null(data)) return("0")
+    nrow(data)
   })
     
   # Download handlers ---------------------------------------------------------
