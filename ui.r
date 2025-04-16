@@ -62,6 +62,7 @@ ui <- fluidPage(
     id = "mainTabs",
     tabPanel("Resumen ejecutivo", value = "summary"),
     tabPanel("Variables ambientales", value = "environment"),
+    tabPanel("Capturas", value = "catches"),
     tabPanel("Mapas de cambios en distribución", value = "distribution"),
     tabPanel("Crecimiento y tamaño de la población", value = "population"),
     tabPanel("Mapa Vulnerabilidad regional", value = "vulnerability"),
@@ -95,6 +96,14 @@ ui <- fluidPage(
         )
       ),
       
+      # Catches Filters
+      conditionalPanel(
+        condition = "input.mainTabs === 'catches'",
+        div(class = "filter-section",
+          selectInput("catches_entity", "Entidad:", choices = NULL),
+          selectInput("catches_species", "Especie:", choices = NULL)
+        )
+      ),
       # Species Risk Filters
       #conditionalPanel(
       #  condition = "input.mainTabs === 'risk'",
@@ -179,7 +188,7 @@ ui <- fluidPage(
         )
       ),
       
-      # Distribution Filters
+      # Distribution Filters ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'distribution'",
         div(class = "filter-section",
@@ -188,7 +197,7 @@ ui <- fluidPage(
         )
       ),
             
-      # Workshops Filters
+      # Workshops Filters ----------------------------------------------------------
       conditionalPanel(
         condition = "input.mainTabs === 'workshops'",
         div(class = "filter-section",
@@ -229,6 +238,30 @@ ui <- fluidPage(
         )
       ),
       
+      # Catches ----------------------------------------------------------
+      conditionalPanel(
+        condition = "input.mainTabs === 'catches'",
+        div(class = "tab-content",
+            h3("Registro de Capturas", class = "section-title"),
+            
+            # Species and State info display
+            uiOutput("catches_info"),
+            
+            # Three time series charts
+            h4("Peso Desembarcado (kg)"),
+            withSpinner(plotlyOutput("catches_weight_plot", height = "300px")),
+            
+            h4("Días Efectivos"),
+            withSpinner(plotlyOutput("catches_days_plot", height = "300px")),
+            
+            h4("Número de Embarcaciones"),
+            withSpinner(plotlyOutput("catches_vessels_plot", height = "300px")),
+            
+            div(class = "help-text", 
+                "Total de archivos procesados: ", 
+                textOutput("catches_files_count", inline = TRUE))
+        )
+      ),
       # Species Risk ----------------------------------------------------------
       #conditionalPanel(
       #  condition = "input.mainTabs === 'risk'",

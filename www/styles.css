@@ -688,3 +688,42 @@ body {
     padding-bottom: 10px;
   }
 }
+/* Styles for the catches section */
+.catches-info-panel {
+  background-color: #edf2f7;
+  border-left: 5px solid #2874A6;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.catches-chart-container {
+  background-color: white;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.catches-chart-title {
+  color: #2d3748;
+  margin-top: 0;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+}
+
+/* Chart-specific colors */
+.weight-chart { 
+  --chart-color: var(--secondary-blue);
+}
+
+.days-chart { 
+  --chart-color: var(--turquesa);
+}
+
+.vessels-chart { 
+  --chart-color: var(--accent-blue);
+}
