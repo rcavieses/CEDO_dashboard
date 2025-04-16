@@ -650,10 +650,10 @@ function(input, output, session) {
     
     div(class = "help-text", 
         "Mostrando ", 
-        if(input$show_all_records || count <= 10) {
+        if(input$show_all_records || count <= 20) {
           paste0(count, " estrategias")
         } else {
-          "primeras 10 estrategias (marque 'Mostrar todos los registros' para ver el total)"
+          "primeras 20 estrategias (marque 'Mostrar todos los registros' para ver el total)"
         },
         br(),
         "Filtros aplicados: ",
@@ -1426,7 +1426,7 @@ function(input, output, session) {
     df
   })
 
-  # Get unique cooperatives list
+  # Get unique cooperatives list - limpia y normalizada para el selector
   workshops_cooperatives <- reactive({
     data <- workshops_data()
     if (is.null(data)) return(character(0))
@@ -1436,10 +1436,17 @@ function(input, output, session) {
       return(character(0))
     }
     
-    sort(unique(data[["Cooperativa"]]))
+    # Normalizar nombres para comparación
+    cleaned_names <- trimws(data$Cooperativa)  # Eliminar espacios en blanco al inicio y final
+    
+    # Obtener valores únicos (conservando el primer ejemplo de cada nombre)
+    unique_coops <- cleaned_names[!duplicated(cleaned_names)]
+    
+    # Ordenar alfabéticamente para el selector
+    sort(unique_coops)
   })
 
-  # Update cooperative selector
+  # Update cooperative selector con la lista limpia
   observe({
     cooperatives <- workshops_cooperatives()
     updateSelectInput(
@@ -1450,15 +1457,20 @@ function(input, output, session) {
     )
   })
 
-  # Filter data by selected cooperative
+  # Filter data by selected cooperative - modificado para buscar coincidencias
   filtered_workshops_data <- reactive({
     data <- workshops_data()
     if (is.null(data)) return(NULL)
     
     req(input$workshops_cooperative)
-    data[data[["Cooperativa"]] == input$workshops_cooperative, , drop = FALSE]
+    
+    # Normalizar el nombre seleccionado y los nombres en el dataset
+    selected_coop_clean <- trimws(input$workshops_cooperative)
+    data_coops_clean <- trimws(data$Cooperativa)
+    
+    # Filtrar registros donde el nombre limpio coincida con el seleccionado
+    data[data_coops_clean == selected_coop_clean, , drop = FALSE]
   })
-
   # Define column groupings
   info_general_cols <- c("Grupo de acción", "Tipo de acción", "Origen de la acción")
   acciones_cols     <- c("Acción recomendada", "Plazo")
