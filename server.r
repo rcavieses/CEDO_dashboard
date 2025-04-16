@@ -1596,237 +1596,235 @@ function(input, output, session) {
 
   # 11. Catches Component ------------------------------------------------------
 
-  # Load catches data from Excel files
-  catches_data <- reactive({
-    # Get paths to all Excel files in the data/cap directory
-    paths <- get_file_paths("data/cap")
-    
-    if(paths$using_www) {
-      # If using www structure
-      excel_files <- list.files(path = paths$file_path, pattern = "\\.xlsx$", full.names = TRUE)
-    } else {
-      # Original structure
-      excel_files <- list_files_with_ext("data/cap", "xlsx")
-    }
-    
-    # Process each file
-    all_data <- lapply(excel_files, function(file_path) {
-      tryCatch({
-        # Read the Excel file - we only need the first sheet
-        data <- safe_read_excel(file_path, sheet = 1)
-        
-        if (is.null(data) || nrow(data) < 3) {
-          warning(paste("Invalid data format in file:", file_path))
+    # Leer archivos CSV desde la carpeta
+    catches_data <- reactive({
+      csv_files <- list.files(path = "data/cap", pattern = "\\.csv$", full.names = TRUE)
+      
+      all_data <- lapply(csv_files, function(file_path) {
+        tryCatch({
+          # Extraer nombre del archivo
+          file_name <- basename(file_path)
+          
+          # Buscar patrón: Sp_NOMBRE_St_ENTIDAD.csv
+          match <- regexpr("Sp_(.*?)_St_(.*?)\\.csv", file_name, perl = TRUE)
+          if (match == -1) return(NULL)
+          
+          captures <- regmatches(file_name, match)
+          matches <- regmatches(file_name, regexec("Sp_(.*?)_St_(.*?)\\.csv", file_name, perl = TRUE))[[1]]
+          
+          species <- gsub("_", " ", matches[2])
+          state <- gsub("_", " ", matches[3])
+          
+          list(
+            file_path = file_path,
+            species = species,
+            state = state
+          )
+        }, error = function(e) {
+          warning(paste("Error processing filename:", file_path, "Error:", e$message))
           return(NULL)
+        })
+      })
+      
+      all_data <- all_data[!sapply(all_data, is.null)]
+      return(all_data)
+    })
+
+    # Extraer entidades únicas
+    catches_entities <- reactive({
+      data <- catches_data()
+      if (length(data) == 0) return(character(0))
+      
+      states <- sapply(data, function(x) x$state)
+      sort(unique(states))
+    })
+
+    # Actualizar selectInput de entidades
+    observe({
+      entities <- catches_entities()
+      updateSelectInput(session, "catches_entity", 
+                        choices = entities,
+                        selected = if(length(entities) > 0) entities[1] else NULL)
+    })
+
+    # Filtrar por entidad seleccionada
+    filtered_by_entity <- reactive({
+      req(input$catches_entity)
+      Filter(function(x) x$state == input$catches_entity, catches_data())
+    })
+
+    # Extraer especies disponibles para la entidad seleccionada
+    catches_species <- reactive({
+      data <- filtered_by_entity()
+      if (length(data) == 0) return(character(0))
+      
+      species <- sapply(data, function(x) x$species)
+      sort(unique(species))
+    })
+
+    # Actualizar selectInput de especies
+    observe({
+      species <- catches_species()
+      updateSelectInput(session, "catches_species", 
+                        choices = species,
+                        selected = if(length(species) > 0) species[1] else NULL)
+    })
+
+    # Leer archivo para especie seleccionada
+    selected_species_data <- reactive({
+      req(input$catches_entity, input$catches_species)
+      selected_file <- Filter(function(x) x$state == input$catches_entity && x$species == input$catches_species, catches_data())
+      if (length(selected_file) == 0) return(NULL)
+      
+      file_path <- selected_file[[1]]$file_path
+      
+      # Leer CSV con opciones adicionales para manejo de errores
+      data <- tryCatch({
+        # Intentar leer con readr para mejor manejo de columnas
+        if (requireNamespace("readr", quietly = TRUE)) {
+          data <- readr::read_csv(file_path, show_col_types = FALSE)
+          # Convertir a data.frame
+          data <- as.data.frame(data)
+        } else {
+          # Alternativa con utils::read.csv
+          data <- utils::read.csv(file_path, stringsAsFactors = FALSE, check.names = FALSE)
         }
-        
-        # Extract species name from first row, first cell
-        species <- as.character(data[0, 1])
-        
-        # Extract state name from second row, first cell
-        state <- as.character(data[1, 1])
-        
-        # Get header row (third row)
-        headers <- as.character(unlist(data[2, ]))
-        
-        # Data rows (fourth row and below)
-        data_rows <- data[3:nrow(data), ]
-        
-        # Set column names based on headers
-        colnames(data_rows) <- headers
-        
-        # Return object with metadata and data
-        list(
-          file_path = file_path,
-          species = species,
-          state = state,
-          headers = headers,
-          data = data_rows
-        )
+        data
       }, error = function(e) {
-        warning(paste("Error processing file:", file_path, "Error:", e$message))
+        warning(paste("No se pudo leer el archivo:", file_path, "Error:", e$message))
         return(NULL)
       })
+      
+      if (is.null(data)) return(NULL)
+      
+      # Verificar columnas necesarias de manera más flexible
+      expected_cols <- c("Año", "Mes", "PESO DESEMBARCADO_KILOGRAMOS", "DIAS EFECTIVOS", "NUMERO EMBARCACIONES")
+      actual_cols <- colnames(data)
+      
+      # Imprimir nombres de columnas para diagnóstico
+      message("Columnas encontradas: ", paste(actual_cols, collapse = ", "))
+      
+      # Verificar si faltan columnas
+      if (!all(expected_cols %in% actual_cols)) {
+        # Intentar mapeo flexible ignorando mayúsculas/minúsculas, espacios, acentos
+        col_map <- list(
+          "año" = "Año",
+          "ano" = "Año",
+          "anio" = "Año",
+          "mes" = "Mes",
+          "peso" = "PESO DESEMBARCADO_KILOGRAMOS",
+          "peso desembarcado" = "PESO DESEMBARCADO_KILOGRAMOS",
+          "peso_desembarcado" = "PESO DESEMBARCADO_KILOGRAMOS",
+          "peso desembarcado_kilogramos" = "PESO DESEMBARCADO_KILOGRAMOS",
+          "dias" = "DIAS EFECTIVOS",
+          "dias efectivos" = "DIAS EFECTIVOS",
+          "dias_efectivos" = "DIAS EFECTIVOS",
+          "numero" = "NUMERO EMBARCACIONES",
+          "numero embarcaciones" = "NUMERO EMBARCACIONES",
+          "numero_embarcaciones" = "NUMERO EMBARCACIONES",
+          "embarcaciones" = "NUMERO EMBARCACIONES"
+        )
+        
+        # Normalizar nombres de columnas
+        norm_cols <- tolower(gsub("[[:space:]_]", "", actual_cols))
+        mapped_cols <- actual_cols
+        
+        # Intentar mapear las columnas
+        for (i in seq_along(norm_cols)) {
+          for (pat in names(col_map)) {
+            if (grepl(pat, norm_cols[i], fixed = TRUE)) {
+              mapped_cols[i] <- col_map[[pat]]
+              break
+            }
+          }
+        }
+        
+        # Aplicar mapeo si encontramos coincidencias para todas las columnas esperadas
+        if (all(expected_cols %in% mapped_cols)) {
+          colnames(data) <- mapped_cols
+          message("Columnas mapeadas exitosamente.")
+        } else {
+          missing_cols <- expected_cols[!expected_cols %in% mapped_cols]
+          warning(paste("Faltan columnas necesarias:", paste(missing_cols, collapse = ", ")))
+          return(NULL)
+        }
+      }
+      
+      # Convertir a tipos numéricos de manera segura
+      for (col in c("Año", "Mes", "PESO DESEMBARCADO_KILOGRAMOS", "DIAS EFECTIVOS", "NUMERO EMBARCACIONES")) {
+        if (col %in% colnames(data)) {
+          data[[col]] <- as.numeric(as.character(data[[col]]))
+        }
+      }
+      
+      # Crear columna de fecha para gráficas
+      data$Date <- as.Date(paste(data$Año, data$Mes, "15", sep = "-"), format = "%Y-%m-%d")
+      
+      # Ordenar cronológicamente
+      data <- data[order(data$Date), ]
+      
+      return(data)
     })
-    
-    # Remove NULL entries (failed processing)
-    all_data <- all_data[!sapply(all_data, is.null)]
-    
-    return(all_data)
-  })
 
-  # Extract unique entities (states) from catches data
-  catches_entities <- reactive({
-    data <- catches_data()
-    if (length(data) == 0) return(character(0))
-    
-    # Extract state from each file's metadata
-    states <- sapply(data, function(x) x$state)
-    
-    # Return unique, sorted states
-    sort(unique(states))
-  })
-
-  # Update entities dropdown
-  observe({
-    entities <- catches_entities()
-    updateSelectInput(session, "catches_entity", 
-                      choices = entities,
-                      selected = if(length(entities) > 0) entities[1] else NULL)
-  })
-
-  # Filter data by selected entity
-  filtered_catches_by_entity <- reactive({
-    data <- catches_data()
-    if (length(data) == 0) return(list())
-    
-    req(input$catches_entity)
-    
-    # Filter to only include files from the selected state
-    filtered <- Filter(function(x) x$state == input$catches_entity, data)
-    
-    return(filtered)
-  })
-
-  # Extract unique species for the selected entity
-  catches_species <- reactive({
-    data <- filtered_catches_by_entity()
-    if (length(data) == 0) return(character(0))
-    
-    # Extract species from each file's metadata
-    species <- sapply(data, function(x) x$species)
-    
-    # Return unique, sorted species
-    sort(unique(species))
-  })
-
-  # Update species dropdown based on selected entity
-  observe({
-    species <- catches_species()
-    updateSelectInput(session, "catches_species", 
-                      choices = species,
-                      selected = if(length(species) > 0) species[1] else NULL)
-  })
-
-  # Get data for the selected species
-  selected_catches_data <- reactive({
-    data <- filtered_catches_by_entity()
-    if (length(data) == 0) return(NULL)
-    
-    req(input$catches_species)
-    
-    # Find the file for the selected species
-    selected <- Filter(function(x) x$species == input$catches_species, data)
-    
-    if (length(selected) == 0) return(NULL)
-    
-    # Return the first matching file (there should only be one)
-    return(selected[[1]])
-  })
-
-  # Prepare time series data for plotting
-  prepare_time_series_data <- reactive({
-    data_obj <- selected_catches_data()
-    if (is.null(data_obj)) return(NULL)
-    
-    data <- data_obj$data
-    
-    # Check if expected columns exist
-    req_cols <- c("Año", "Mes", "PESO DESEMBARCADO_KILOGRAMOS", "DIAS EFECTIVOS", "NUMERO EMBARCACIONES")
-    if (!all(req_cols %in% colnames(data))) {
-      warning("Missing required columns in data")
-      return(NULL)
-    }
-    
-    # Convert types if needed
-    data$Año <- as.numeric(data$Año)
-    data$Mes <- as.numeric(data$Mes)
-    data$`PESO DESEMBARCADO_KILOGRAMOS` <- as.numeric(data$`PESO DESEMBARCADO_KILOGRAMOS`)
-    data$`DIAS EFECTIVOS` <- as.numeric(data$`DIAS EFECTIVOS`)
-    data$`NUMERO EMBARCACIONES` <- as.numeric(data$`NUMERO EMBARCACIONES`)
-    
-    # Create date column for proper time series (15th day of each month)
-    data$Date <- as.Date(paste(data$Año, data$Mes, "15", sep="-"), format="%Y-%m-%d")
-    
-    # Sort by date
-    data <- data[order(data$Date), ]
-    
-    return(data)
-  })
-
-  # Display species and state info
-  output$catches_info <- renderUI({
-    data_obj <- selected_catches_data()
-    if (is.null(data_obj)) {
-      return(HTML("<div class='alert alert-warning'>No hay datos disponibles para la selección actual.</div>"))
-    }
-    
-    div(
-      style = "margin-bottom: 20px; background-color: #1a365d; padding: 15px; border-radius: 10px;",
-      h3(
-        paste(data_obj$species, "-", data_obj$state), 
-        style = "color: white; margin: 0; text-align: center;"
+    # Mostrar título
+    output$catches_info <- renderUI({
+      req(input$catches_species, input$catches_entity)
+      div(
+        style = "margin-bottom: 20px; background-color: #1a365d; padding: 15px; border-radius: 10px;",
+        h3(
+          paste(input$catches_species, "-", input$catches_entity), 
+          style = "color: white; margin: 0; text-align: center;"
+        )
       )
-    )
-  })
+    })
 
-  # Plot weight time series
-  output$catches_weight_plot <- renderPlotly({
-    data <- prepare_time_series_data()
-    if (is.null(data)) return(NULL)
-    
-    plot_ly(data, x = ~Date, y = ~`PESO DESEMBARCADO_KILOGRAMOS`, type = 'scatter', mode = 'lines+markers',
-            line = list(color = '#2874A6', width = 2),
-            marker = list(color = '#2874A6', size = 5)) %>%
-      layout(
-        title = "",
-        xaxis = list(title = "Fecha"),
-        yaxis = list(title = "Peso (kg)"),
-        margin = list(l = 50, r = 20, b = 50, t = 30),
-        hovermode = "closest"
-      )
-  })
+    # Gráfica: peso
+    output$catches_weight_plot <- renderPlotly({
+      data <- selected_species_data()
+      if (is.null(data)) return(NULL)
+      
+      plot_ly(data, x = ~Date, y = ~`PESO DESEMBARCADO_KILOGRAMOS`, type = 'scatter', mode = 'lines+markers',
+              line = list(color = '#2874A6', width = 2),
+              marker = list(color = '#2874A6', size = 5)) %>%
+        layout(xaxis = list(title = "Fecha"),
+              yaxis = list(title = "Peso (kg)"),
+              margin = list(l = 50, r = 20, b = 50, t = 30),
+              hovermode = "closest")
+    })
 
-  # Plot days time series
-  output$catches_days_plot <- renderPlotly({
-    data <- prepare_time_series_data()
-    if (is.null(data)) return(NULL)
-    
-    plot_ly(data, x = ~Date, y = ~`DIAS EFECTIVOS`, type = 'scatter', mode = 'lines+markers',
-            line = list(color = '#27AE60', width = 2),
-            marker = list(color = '#27AE60', size = 5)) %>%
-      layout(
-        title = "",
-        xaxis = list(title = "Fecha"),
-        yaxis = list(title = "Días"),
-        margin = list(l = 50, r = 20, b = 50, t = 30),
-        hovermode = "closest"
-      )
-  })
+    # Gráfica: días efectivos
+    output$catches_days_plot <- renderPlotly({
+      data <- selected_species_data()
+      if (is.null(data)) return(NULL)
+      
+      plot_ly(data, x = ~Date, y = ~`DIAS EFECTIVOS`, type = 'scatter', mode = 'lines+markers',
+              line = list(color = '#27AE60', width = 2),
+              marker = list(color = '#27AE60', size = 5)) %>%
+        layout(xaxis = list(title = "Fecha"),
+              yaxis = list(title = "Días"),
+              margin = list(l = 50, r = 20, b = 50, t = 30),
+              hovermode = "closest")
+    })
 
-  # Plot vessels time series
-  output$catches_vessels_plot <- renderPlotly({
-    data <- prepare_time_series_data()
-    if (is.null(data)) return(NULL)
-    
-    plot_ly(data, x = ~Date, y = ~`NUMERO EMBARCACIONES`, type = 'scatter', mode = 'lines+markers',
-            line = list(color = '#8E44AD', width = 2),
-            marker = list(color = '#8E44AD', size = 5)) %>%
-      layout(
-        title = "",
-        xaxis = list(title = "Fecha"),
-        yaxis = list(title = "Embarcaciones"),
-        margin = list(l = 50, r = 20, b = 50, t = 30),
-        hovermode = "closest"
-      )
-  })
+    # Gráfica: embarcaciones
+    output$catches_vessels_plot <- renderPlotly({
+      data <- selected_species_data()
+      if (is.null(data)) return(NULL)
+      
+      plot_ly(data, x = ~Date, y = ~`NUMERO EMBARCACIONES`, type = 'scatter', mode = 'lines+markers',
+              line = list(color = '#8E44AD', width = 2),
+              marker = list(color = '#8E44AD', size = 5)) %>%
+        layout(xaxis = list(title = "Fecha"),
+              yaxis = list(title = "Embarcaciones"),
+              margin = list(l = 50, r = 20, b = 50, t = 30),
+              hovermode = "closest")
+    })
 
-  # Count files processed
-  output$catches_files_count <- renderText({
-    data <- catches_data()
-    length(data)
-  })
-    
+    # Mostrar número de archivos procesados
+    output$catches_files_count <- renderText({
+      data <- catches_data()
+      length(data)
+    })
   # Download handlers ---------------------------------------------------------
   # 1. Reemplazamos el botón de "Descargar Reporte" con un enlace a Google Drive
   output$download_report <- renderUI({
